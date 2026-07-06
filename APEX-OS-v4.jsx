@@ -15,7 +15,7 @@ import * as XLSX from "xlsx";
 //
 // The proxy accepts the same request shape as Claude (/v1/messages),
 // so no other code in this file needs to change.
-const PROXY_BASE_URL = "const PROXY_BASE_URL = "https://apex-os-nztm.onrender.com";
+const PROXY_BASE_URL = "https://apex-os-nztm.onrender.com";
 
 // ============================================================
 // ██████╗  ██████╗   APEX OS v4.0
