@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 
 // ── AI PROVIDER CONFIGURATION ─────────────────────────────────
 // To use the Gemini backend proxy: set this to your running proxy URL.
-// Local dev:  "http://localhost:8787"
+// Local dev:  "const PROXY_BASE_URL = "https://apex-os-nztm.onrender.com";
 // Production: "https://your-proxy.yourdomain.com"
 //
 // When PROXY_BASE_URL is set, ALL AI calls (CEO, employees, planner,
