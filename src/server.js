@@ -4,7 +4,7 @@
 //
 // Architecture overview:
 //   Browser (APEX-OS-v4.jsx)
-//       └──► POST http://localhost:8787/v1/messages
+//       └──► POST const PROXY_BASE_URL = "https://apex-os-nztm.onrender.com";v1/messages
 //                └──► src/routes/messages.js
 //                         └──► src/services/geminiService.js
 //                                  └──► Gemini REST API
