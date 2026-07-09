@@ -25,7 +25,7 @@ const config = {
   nodeEnv: process.env.NODE_ENV || "development",
   corsOrigin: process.env.CORS_ORIGIN || "*",
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),
-  rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "60", 10),
+  rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "120", 10),
 };
 
 if (config.aiProvider !== "gemini") {

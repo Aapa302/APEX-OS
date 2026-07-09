@@ -1,7 +1,0 @@
-{"ts":"2026-07-09T12:11:17.270Z","level":"info","message":"APEX Gemini Proxy running","data":{"port":8787,"env":"development","provider":"gemini","model":"gemini-2.0-flash","cors":"*","rateLimitPerMin":60}}
-{"ts":"2026-07-09T12:11:17.271Z","level":"info","message":"Proxy endpoint: http://localhost:8787/v1/messages"}
-{"ts":"2026-07-09T12:11:17.271Z","level":"info","message":"Health check:   http://localhost:8787/health"}
-2026-07-09T12:11:19.184Z GET /health 200 2.949 ms
-2026-07-09T12:11:29.028Z POST /v1/export/zip 200 11.596 ms
-{"ts":"2026-07-09T12:11:47.644Z","level":"info","message":"Received SIGTERM. Shutting down gracefully…"}
-{"ts":"2026-07-09T12:11:47.645Z","level":"info","message":"Server closed."}
