@@ -181,10 +181,43 @@ const saveLS = (data) => {
   try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
 };
 
+// ── FETCH UTILITY WITH RETRY ──────────────────────────────
+const fetchWithRetry = async (url, options, maxRetries = 3) => {
+  let lastErr;
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.status === 429 && i < maxRetries) {
+        const delay = Math.pow(2, i + 1) * 1000;
+        console.warn(`[ApexOS] Rate limit (429) hit. Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        const msg = errBody.error?.message || `API Error ${res.status}`;
+        throw new Error(msg);
+      }
+      return res;
+    } catch (err) {
+      lastErr = err;
+      if (i === maxRetries) break;
+      const isNetworkError = err.message.includes("Failed to fetch") || err.message.includes("network");
+      const delay = Math.pow(2, i + 1) * 1000;
+      console.warn(`[ApexOS] Attempt ${i + 1} failed: ${err.message}. Retrying in ${delay}ms...`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  const finalMsg = lastErr?.message?.includes("Failed to fetch")
+    ? "Failed to fetch: Connection refused or proxy down. Ensure the backend is running."
+    : (lastErr?.message || "Request failed after multiple retries.");
+  throw new Error(finalMsg);
+};
+
 // ── CLAUDE API ────────────────────────────────────────────
 const callClaude = async (messages, system, onStream) => {
   const endpoint = `${PROXY_BASE_URL || "https://api.anthropic.com"}/v1/messages`;
-  const res = await fetch(endpoint, {
+  const res = await fetchWithRetry(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -194,7 +227,6 @@ const callClaude = async (messages, system, onStream) => {
       messages,
     }),
   });
-  if (!res.ok) throw new Error(`API ${res.status}`);
   const data = await res.json();
   const fullText = data.content?.map(b => b.text || "").join("") || "";
   // Simulate streaming for UX
@@ -542,28 +574,25 @@ const downloadZip = (files, projectName = "apex-build") => {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 };
 
-// ── GITHUB EXPORT (direct REST API — works when deployed for real;
-// blocked by CSP inside the claude.ai artifact sandbox preview) ────
+// ── GITHUB EXPORT (via Proxy — works in Claude.ai artifact sandbox) ────
 const pushFilesToGithub = async ({ token, owner, repo, branch = "main", files, commitMessage }) => {
   if (!token || !owner || !repo) throw new Error("Token, owner, and repo are required");
-  const headers = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" };
-  for (const f of files) {
-    const contentB64 = btoa(unescape(encodeURIComponent(f.content || "")));
-    let sha;
-    try {
-      const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(f.path)}?ref=${branch}`, { headers });
-      if (getRes.ok) { const j = await getRes.json(); sha = j.sha; }
-    } catch {}
-    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(f.path)}`, {
-      method: "PUT",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ message: commitMessage || `Add ${f.path} via APEX OS`, content: contentB64, branch, ...(sha ? { sha } : {}) }),
-    });
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => "");
-      throw new Error(`GitHub push failed for ${f.path}: ${res.status} ${errBody.slice(0, 120)}`);
-    }
+
+  const endpoint = PROXY_BASE_URL
+    ? `${PROXY_BASE_URL}/v1/export/github`
+    : null;
+
+  if (!endpoint) {
+    throw new Error("GitHub export requires PROXY_BASE_URL to be set to bypass browser CSP.");
   }
+
+  const res = await fetchWithRetry(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, owner, repo, branch, files, commitMessage }),
+  });
+
+  return await res.json();
 };
 
 // ── APP STATE REDUCER ─────────────────────────────────────
@@ -809,11 +838,10 @@ const callClaudeJSON = async (messages, system, maxTokens = 1000) => {
   const endpoint = PROXY_BASE_URL
     ? `${PROXY_BASE_URL}/v1/messages/json`
     : "https://api.anthropic.com/v1/messages";
-  const res = await fetch(endpoint, {
+  const res = await fetchWithRetry(endpoint, {
     method:"POST", headers:{"Content-Type":"application/json"},
     body:JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:maxTokens, system, messages }),
   });
-  if(!res.ok) throw new Error(`API ${res.status}`);
   const data = await res.json();
   const text = data.content?.map(b=>b.text||"").join("")||"";
   const clean = text.replace(/```json\s*/gi,"").replace(/```\s*/g,"").trim();
@@ -1307,7 +1335,7 @@ const BuildView = ({ S, T, inp, buildSpec, setBuildSpec, buildName, setBuildName
       await pushFilesToGithub({ token: ghToken, owner: ghOwner, repo: ghRepo, branch: ghBranch, files: build.files, commitMessage: `APEX OS build: ${build.name}` });
       setGhMsg({ type:"success", text:`Pushed ${build.files.length} file(s) to ${ghOwner}/${ghRepo}@${ghBranch}` });
     } catch(e) {
-      setGhMsg({ type:"error", text:`${e.message}. Note: if you're testing inside the claude.ai artifact preview, GitHub export is blocked by the sandbox's network policy — this works once the app is deployed for real (e.g. on Render).` });
+      setGhMsg({ type:"error", text: e.message });
     }
     setGhPushing(false);
   };

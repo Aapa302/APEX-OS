@@ -81,7 +81,7 @@ class GeminiError extends Error {
 }
 
 /**
- * Calls Gemini's generateContent endpoint.
+ * Calls Gemini's generateContent endpoint with retry logic for 429 errors.
  *
  * @param {Array} messages - Anthropic-shaped messages array
  * @param {string} system - system prompt text
@@ -90,7 +90,6 @@ class GeminiError extends Error {
  */
 async function generateContent(messages, system, opts = {}) {
   const { jsonMode = false, maxTokens = 1000 } = opts;
-
   const url = `${GEMINI_BASE_URL}/models/${config.geminiModel}:generateContent`;
 
   const body = {
@@ -109,34 +108,47 @@ async function generateContent(messages, system, opts = {}) {
     body.generationConfig.response_mime_type = "application/json";
   }
 
-  let res;
-  try {
-    res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": config.geminiApiKey,
-      },
-      body: JSON.stringify(body),
-    });
-  } catch (networkErr) {
-    throw new GeminiError(`Network error calling Gemini: ${networkErr.message}`, 502);
-  }
+  const maxRetries = 3;
+  let retryCount = 0;
 
-  let data;
-  const rawText = await res.text();
-  try {
-    data = JSON.parse(rawText);
-  } catch {
-    throw new GeminiError(`Gemini returned non-JSON response (status ${res.status})`, 502, rawText.slice(0, 500));
-  }
+  while (true) {
+    let res;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": config.geminiApiKey,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (networkErr) {
+      throw new GeminiError(`Network error calling Gemini: ${networkErr.message}`, 502);
+    }
 
-  if (!res.ok) {
-    const apiMessage = data?.error?.message || `Gemini API error (status ${res.status})`;
-    throw new GeminiError(apiMessage, res.status, data?.error || null);
-  }
+    let data;
+    const rawText = await res.text();
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      throw new GeminiError(`Gemini returned non-JSON response (status ${res.status})`, 502, rawText.slice(0, 500));
+    }
 
-  return toAnthropicResponse(data);
+    if (!res.ok) {
+      if (res.status === 429 && retryCount < maxRetries) {
+        retryCount++;
+        const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff: 2s, 4s, 8s
+        console.warn(`[GeminiService] 429 Rate Limit hit. Retrying in ${delay}ms... (Attempt ${retryCount}/${maxRetries})`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+
+      const apiMessage = data?.error?.message || `Gemini API error (status ${res.status})`;
+      throw new GeminiError(apiMessage, res.status, data?.error || null);
+    }
+
+    return toAnthropicResponse(data);
+  }
 }
 
 module.exports = { generateContent, GeminiError, toGeminiContents, toAnthropicResponse };
