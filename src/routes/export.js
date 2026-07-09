@@ -7,6 +7,7 @@
 
 const express = require("express");
 const { logger } = require("../middleware/logger");
+const AdmZip = require("adm-zip");
 
 const router = express.Router();
 
@@ -82,6 +83,45 @@ router.post("/github", async (req, res, next) => {
   } catch (err) {
     logger.error("GitHub export failed", err.message);
     next(err);
+  }
+});
+
+router.post("/zip", (req, res) => {
+  const { files, projectName } = req.body;
+
+  if (!files || !Array.isArray(files)) {
+    return res.status(400).json({
+      error: {
+        type: "invalid_request",
+        message: "Missing 'files' array.",
+      },
+    });
+  }
+
+  try {
+    const zip = new AdmZip();
+    files.forEach((file) => {
+      zip.addFile(file.path, Buffer.from(file.content || "", "utf8"));
+    });
+
+    const zipBuffer = zip.toBuffer();
+    const filename = `${(projectName || "apex-build").replace(/[^a-z0-9-_]/gi, "_")}.zip`;
+
+    res.set({
+      "Content-Type": "application/zip",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": zipBuffer.length,
+    });
+
+    res.send(zipBuffer);
+  } catch (err) {
+    logger.error("ZIP generation failed", err.message);
+    res.status(500).json({
+      error: {
+        type: "internal_error",
+        message: "Failed to generate ZIP file.",
+      },
+    });
   }
 });
 

@@ -15,7 +15,9 @@ import * as XLSX from "xlsx";
 //
 // The proxy accepts the same request shape as Claude (/v1/messages),
 // so no other code in this file needs to change.
-const PROXY_BASE_URL = "https://apex-os-nztm.onrender.com";
+const PROXY_BASE_URL = (typeof window !== "undefined" && window.location.hostname === "localhost")
+  ? "http://localhost:8787"
+  : "https://apex-os-nztm.onrender.com";
 
 // ============================================================
 // ██████╗  ██████╗   APEX OS v4.0
@@ -562,16 +564,49 @@ const createZipBlob = (files) => {
   return new Blob([...localParts, ...centralParts, end], { type: "application/zip" });
 };
 
-const downloadZip = (files, projectName = "apex-build") => {
-  const blob = createZipBlob(files);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${(projectName || "apex-build").replace(/[^a-z0-9-_]/gi, "_")}.zip`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+const downloadZip = async (files, projectName = "apex-build") => {
+  if (!PROXY_BASE_URL) {
+    const blob = createZipBlob(files);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(projectName || "apex-build").replace(/[^a-z0-9-_]/gi, "_")}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return;
+  }
+
+  try {
+    const res = await fetchWithRetry(`${PROXY_BASE_URL}/v1/export/zip`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ files, projectName }),
+    });
+
+    if (!res.ok) throw new Error("Server-side ZIP failed");
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(projectName || "apex-build").replace(/[^a-z0-9-_]/gi, "_")}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (e) {
+    console.error("ZIP Error:", e);
+    alert("Could not generate ZIP. Falling back to client-side method.");
+    const blob = createZipBlob(files);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(projectName || "apex-build").replace(/[^a-z0-9-_]/gi, "_")}.zip`;
+    a.click();
+    a.remove();
+  }
 };
 
 // ── GITHUB EXPORT (via Proxy — works in Claude.ai artifact sandbox) ────
@@ -803,10 +838,13 @@ ${revisionNotes ? `\nREVISION NEEDED — the CTO requested these changes across 
 NOW WRITE: ${targetFile.path} — ${targetFile.description}
 
 Rules:
-- COMPLETE, runnable code. No "// TODO", no "// rest of implementation", no placeholders — implement the real logic.
+- COMPLETE, runnable production-ready code.
+- NO PLACEHOLDERS. No "// TODO", no "// implementation goes here", no "// rest of code...".
+- If you cannot fit the entire logic, prioritize the most complex parts, but ALWAYS provide valid, syntactically correct, and functional code.
 - If this is package.json or similar manifest, include real, correct dependency entries.
 - If this is a test file, write real assertions against the actual functions/exports from the other files.
 - Match import paths to the file plan above exactly.
+- Ensure all exported functions/classes are fully implemented.
 
 Output ONLY valid JSON — no markdown fences, no text before or after:
 {"content":"the complete file content as a JSON string (escape newlines as \\n)"}`,
@@ -1011,7 +1049,7 @@ const BuildOrchestrator = {
           const result = await callClaudeJSON(
             [{ role:"user", content:`Write file: ${target.path}` }],
             PromptGenerator.buildFileContent(spec, requirementsRef.current, filePlan, target, otherFilesSummary, company, revisionNotes),
-            6000
+            8192
           );
           content = result.content;
         } catch(e1) {
@@ -1629,6 +1667,7 @@ const CSS = `
 export default function ApexOS() {
   const [state, dispatch] = useReducer(appReducer, null, initialAppState);
   const [view, setView] = useState("dashboard");
+  const [proxyStatus, setProxyStatus] = useState("checking");
   const [activeEmp, setActiveEmp] = useState("cto");
   const [ceoInput, setCeoInput] = useState("");
   const [empInput, setEmpInput] = useState("");
@@ -1668,6 +1707,22 @@ export default function ApexOS() {
   const autoAbortRef = useRef(false);
   const buildAbortRef = useRef(false);
   const abortRef = autoAbortRef;
+
+  // ── Proxy Connectivity Check ──
+  useEffect(() => {
+    const checkProxy = async () => {
+      try {
+        const res = await fetch(`${PROXY_BASE_URL}/health`);
+        if (res.ok) setProxyStatus("online");
+        else setProxyStatus("error");
+      } catch (e) {
+        setProxyStatus("offline");
+      }
+    };
+    checkProxy();
+    const interval = setInterval(checkProxy, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // ── Scroll to bottom ──
   useEffect(() => { ceoChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [state.ceoChats, ceoStream]);
@@ -2007,7 +2062,13 @@ export default function ApexOS() {
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {autoRunning && <div style={{ background: `${T.accent}18`, color: T.accent, padding: "4px 12px", borderRadius: 20, fontSize: "0.72rem", fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}><Dots color={T.accent} />AUTO</div>}
-            <div style={{ background: `${T.green}15`, color: T.green, padding: "4px 12px", borderRadius: 20, fontSize: "0.72rem", fontWeight: 600 }}>● APEX Online</div>
+            <div style={{
+              background: proxyStatus === "online" ? `${T.green}15` : proxyStatus === "offline" ? `${T.red}15` : `${T.yellow}15`,
+              color: proxyStatus === "online" ? T.green : proxyStatus === "offline" ? T.red : T.yellow,
+              padding: "4px 12px", borderRadius: 20, fontSize: "0.72rem", fontWeight: 600
+            }}>
+              ● {proxyStatus === "online" ? "APEX Online" : proxyStatus === "offline" ? "Proxy Offline" : "Checking Proxy..."}
+            </div>
             <div style={{ background: T.surf2, border: `1px solid ${T.border2}`, padding: "4px 12px", borderRadius: 20, fontSize: "0.72rem", color: T.text2 }}>{state.tasks.length} tasks</div>
           </div>
         </div>

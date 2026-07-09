@@ -18,7 +18,7 @@ const router = express.Router();
 
 // ── POST /v1/messages ────────────────────────────────────────
 router.post("/", validateMessagesBody, async (req, res, next) => {
-  const { messages, system, max_tokens, model } = req.body;
+  const { messages, system, max_tokens, model, temperature, top_p } = req.body;
 
   logger.info("POST /v1/messages", {
     messageCount: messages.length,
@@ -30,6 +30,8 @@ router.post("/", validateMessagesBody, async (req, res, next) => {
   try {
     const result = await generateContent(messages, system || "", {
       maxTokens: max_tokens || 1000,
+      temperature,
+      top_p,
       jsonMode: false,
     });
 
@@ -54,16 +56,19 @@ router.post("/", validateMessagesBody, async (req, res, next) => {
 // (used by callClaudeJSON / the Planner and Reviewer code paths).
 // The frontend can call this via callAIJSON once updated.
 router.post("/json", validateMessagesBody, async (req, res, next) => {
-  const { messages, system, max_tokens } = req.body;
+  const { messages, system, max_tokens, temperature, top_p } = req.body;
 
   logger.info("POST /v1/messages/json", {
     messageCount: messages.length,
     hasSystem: !!system,
+    max_tokens: max_tokens || 1000,
   });
 
   try {
     const result = await generateContent(messages, system || "", {
       maxTokens: max_tokens || 1000,
+      temperature,
+      top_p,
       jsonMode: true,
     });
 
