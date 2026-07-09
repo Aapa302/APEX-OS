@@ -1679,9 +1679,10 @@ const CSS = `
 
 export default function ApexOS() {
   const [state, dispatch] = useReducer(appReducer, null, initialAppState);
-  PROXY_BASE_URL = state.proxyUrl || DEFAULT_PROXY;
+  PROXY_BASE_URL = (state.proxyUrl || DEFAULT_PROXY).replace(/\/+$/, '');
   const [view, setView] = useState("dashboard");
   const [proxyStatus, setProxyStatus] = useState("checking");
+  const [proxyDetails, setProxyDetails] = useState("");
   const [activeEmp, setActiveEmp] = useState("cto");
   const [ceoInput, setCeoInput] = useState("");
   const [empInput, setEmpInput] = useState("");
@@ -1726,15 +1727,18 @@ export default function ApexOS() {
   useEffect(() => {
     const checkProxy = async () => {
       try {
-        const res = await fetch(`${PROXY_BASE_URL}/health`);
+        const res = await fetch(`${PROXY_BASE_URL.replace(/\/+$/, '')}/health`);
         if (res.ok) {
           setProxyStatus("online");
+          setProxyDetails("");
         } else {
           setProxyStatus(`error-${res.status}`);
+          setProxyDetails(`${res.status} ${res.statusText}`);
           console.error(`Proxy check failed: ${res.status} ${res.statusText}`);
         }
       } catch (e) {
         setProxyStatus("offline");
+        setProxyDetails(e.message);
         console.warn(`Proxy unreachable at ${PROXY_BASE_URL}:`, e.message);
       }
     };
@@ -2571,8 +2575,25 @@ export default function ApexOS() {
                 </div>
                 <div style={{ fontSize: "0.74rem", color: T.text3, lineHeight: 1.5 }}>
                   Status: <span style={{ color: proxyStatus === "online" ? T.green : proxyStatus === "offline" ? T.red : T.yellow, fontWeight: 700 }}>{proxyStatus.toUpperCase()}</span>
-                  <br />
-                  Current: <span style={{ fontFamily: "monospace" }}>{PROXY_BASE_URL}</span>
+                  {proxyDetails && <div style={{ color: T.red, fontSize: "0.65rem", marginTop: 4 }}>Error: {proxyDetails}</div>}
+                  <div style={{ marginTop: 8 }}>
+                    Current: <span style={{ fontFamily: "monospace", wordBreak: "break-all" }}>{PROXY_BASE_URL}</span>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      toast("Testing connection...", "info");
+                      try {
+                        const res = await fetch(`${PROXY_BASE_URL.replace(/\/+$/, '')}/health`);
+                        if (res.ok) toast("Health check passed!", "success");
+                        else toast(`Health check failed: ${res.status}`, "error");
+                      } catch (e) {
+                        toast(`Network error: ${e.message}`, "error");
+                      }
+                    }}
+                    style={{ marginTop: 10, padding: "6px 12px", background: T.surf2, border: `1px solid ${T.border2}`, borderRadius: 8, color: T.text1, fontSize: "0.7rem", cursor: "pointer" }}
+                  >
+                    Test Connection
+                  </button>
                 </div>
               </div>
 

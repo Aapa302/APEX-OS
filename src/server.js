@@ -33,6 +33,7 @@ const app = express();
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }, // allow browser fetches
+    contentSecurityPolicy: false, // Avoid blocking if frontend is not served by this app
   })
 );
 
@@ -42,14 +43,25 @@ app.use(
 // In production, set CORS_ORIGIN to your specific frontend URL.
 const corsOptions = {
   origin: (origin, callback) => {
-    const allowed = config.corsOrigin === "*" ? "*" : config.corsOrigin.split(",").map((s) => s.trim());
-    if (allowed === "*") return callback(null, true);
-    if (!origin || allowed.indexOf(origin) !== -1) return callback(null, true);
+    // In development or if CORS_ORIGIN is *, allow all
+    if (config.corsOrigin === "*" || !origin) {
+      return callback(null, true);
+    }
+    const allowedOrigins = config.corsOrigin.split(",").map((s) => s.trim());
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    // Specific check for common sandbox environments if not explicitly listed
+    if (origin.endsWith(".claude.ai") || origin.endsWith(".onrender.com")) {
+      return callback(null, true);
+    }
     callback(new Error("Not allowed by CORS"));
   },
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+  exposedHeaders: ["Content-Range", "X-Content-Range"],
   credentials: true,
+  maxAge: 86400, // 24 hours
 };
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // pre-flight
