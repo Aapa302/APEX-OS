@@ -92,11 +92,14 @@ async function generateContent(messages, system, opts = {}) {
   const { jsonMode = false, maxTokens = 1000 } = opts;
   const url = `${GEMINI_BASE_URL}/models/${config.geminiModel}:generateContent`;
 
+  // Map temperature if provided in req.body (Anthropic) or use default 0.7
+  // Anthropic sends max_tokens, but opts.maxTokens already maps it.
   const body = {
     contents: toGeminiContents(messages),
     generationConfig: {
       maxOutputTokens: maxTokens,
-      temperature: 0.7,
+      temperature: opts.temperature ?? 0.7,
+      topP: opts.top_p ?? 0.95,
     },
   };
 

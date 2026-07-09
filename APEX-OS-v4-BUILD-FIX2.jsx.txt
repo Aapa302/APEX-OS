@@ -15,7 +15,8 @@ import * as XLSX from "xlsx";
 //
 // The proxy accepts the same request shape as Claude (/v1/messages),
 // so no other code in this file needs to change.
-const PROXY_BASE_URL = "https://apex-os-nztm.onrender.com";
+const DEFAULT_PROXY = "https://apex-os-nztm.onrender.com";
+let PROXY_BASE_URL = DEFAULT_PROXY;
 
 // ============================================================
 // ██████╗  ██████╗   APEX OS v4.0
@@ -209,8 +210,8 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
     }
   }
   const finalMsg = lastErr?.message?.includes("Failed to fetch")
-    ? "Failed to fetch: Connection refused or proxy down. Ensure the backend is running."
-    : (lastErr?.message || "Request failed after multiple retries.");
+    ? `Failed to fetch from ${url.split('/v1')[0]}: Connection refused or proxy down. Ensure the backend is running at this address.`
+    : (lastErr?.message || `Request to ${url} failed after multiple retries.`);
   throw new Error(finalMsg);
 };
 
@@ -562,16 +563,49 @@ const createZipBlob = (files) => {
   return new Blob([...localParts, ...centralParts, end], { type: "application/zip" });
 };
 
-const downloadZip = (files, projectName = "apex-build") => {
-  const blob = createZipBlob(files);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${(projectName || "apex-build").replace(/[^a-z0-9-_]/gi, "_")}.zip`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+const downloadZip = async (files, projectName = "apex-build") => {
+  if (!PROXY_BASE_URL) {
+    const blob = createZipBlob(files);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(projectName || "apex-build").replace(/[^a-z0-9-_]/gi, "_")}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return;
+  }
+
+  try {
+    const res = await fetchWithRetry(`${PROXY_BASE_URL}/v1/export/zip`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ files, projectName }),
+    });
+
+    if (!res.ok) throw new Error("Server-side ZIP failed");
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(projectName || "apex-build").replace(/[^a-z0-9-_]/gi, "_")}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch (e) {
+    console.error("ZIP Error:", e);
+    alert("Could not generate ZIP. Falling back to client-side method.");
+    const blob = createZipBlob(files);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(projectName || "apex-build").replace(/[^a-z0-9-_]/gi, "_")}.zip`;
+    a.click();
+    a.remove();
+  }
 };
 
 // ── GITHUB EXPORT (via Proxy — works in Claude.ai artifact sandbox) ────
@@ -618,6 +652,7 @@ const initialAppState = () => {
     research: ls.research || [],
     builds: ls.builds || [],
     analytics: ls.analytics || { tasksByDay: [2,4,3,7,5,6,8], revenueByMonth: [0,0,0,0,0,0,0,0,0,0,0,0] },
+    proxyUrl: ls.proxyUrl || (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:8787" : DEFAULT_PROXY),
   };
 };
 
@@ -642,6 +677,7 @@ function appReducer(state, action) {
     case "CLEAR_CEO_CHAT": next = { ...state, ceoChats: [] }; break;
     case "CLEAR_EMP_CHAT": next = { ...state, empChats: { ...state.empChats, [action.empId]: [] } }; break;
     case "ADD_PROJECT": next = { ...state, projects: [...state.projects, action.payload] }; break;
+    case "SET_PROXY": next = { ...state, proxyUrl: action.payload }; break;
     case "RESET": next = { ...initialAppState(), setupDone: false }; break;
 
     case "UPD_EMP_LAST": next = { ...state, empChats: { ...state.empChats, [action.empId]: (state.empChats[action.empId]||[]).map((m,i,a)=>i===a.length-1?{...m,...action.payload}:m) } }; break;
@@ -803,10 +839,13 @@ ${revisionNotes ? `\nREVISION NEEDED — the CTO requested these changes across 
 NOW WRITE: ${targetFile.path} — ${targetFile.description}
 
 Rules:
-- COMPLETE, runnable code. No "// TODO", no "// rest of implementation", no placeholders — implement the real logic.
-- If this is package.json or similar manifest, include real, correct dependency entries.
-- If this is a test file, write real assertions against the actual functions/exports from the other files.
-- Match import paths to the file plan above exactly.
+- COMPLETE, runnable production-ready code.
+- NO PLACEHOLDERS. NEVER use "// TODO", "// implementation goes here", or "// rest of code...".
+- FULL SOURCE ONLY. Every function, class, and method must be fully implemented.
+- If you cannot fit the entire logic in one response, focus on the core functionality but ensure the code remains functional and non-stubbed.
+- If this is package.json, include real dependency versions.
+- If this is a test file, write real, executable assertions.
+- Ensure import paths match the project structure perfectly.
 
 Output ONLY valid JSON — no markdown fences, no text before or after:
 {"content":"the complete file content as a JSON string (escape newlines as \\n)"}`,
@@ -1011,9 +1050,21 @@ const BuildOrchestrator = {
           const result = await callClaudeJSON(
             [{ role:"user", content:`Write file: ${target.path}` }],
             PromptGenerator.buildFileContent(spec, requirementsRef.current, filePlan, target, otherFilesSummary, company, revisionNotes),
-            6000
+            8192
           );
           content = result.content;
+
+          // Code Completeness Check
+          const placeholders = ["// rest of", "// implementation", "// TODO", "// fill in"];
+          if (placeholders.some(p => content.toLowerCase().includes(p))) {
+            log(`🔍 Detected stubbed code in ${target.path}, re-generating...`, "🔍");
+            const finalResult = await callClaudeJSON(
+              [{ role:"user", content:`Your previous output for ${target.path} contained placeholders. REWRITE it now with FULL implementation. NO STUBS.` }],
+              PromptGenerator.buildFileContent(spec, requirementsRef.current, filePlan, target, otherFilesSummary, company, revisionNotes),
+              8192
+            );
+            content = finalResult.content;
+          }
         } catch(e1) {
           log(`🔁 Retrying ${target.path} (response too large)...`, "🔁");
           try {
@@ -1628,7 +1679,9 @@ const CSS = `
 
 export default function ApexOS() {
   const [state, dispatch] = useReducer(appReducer, null, initialAppState);
+  PROXY_BASE_URL = state.proxyUrl || DEFAULT_PROXY;
   const [view, setView] = useState("dashboard");
+  const [proxyStatus, setProxyStatus] = useState("checking");
   const [activeEmp, setActiveEmp] = useState("cto");
   const [ceoInput, setCeoInput] = useState("");
   const [empInput, setEmpInput] = useState("");
@@ -1668,6 +1721,27 @@ export default function ApexOS() {
   const autoAbortRef = useRef(false);
   const buildAbortRef = useRef(false);
   const abortRef = autoAbortRef;
+
+  // ── Proxy Connectivity Check ──
+  useEffect(() => {
+    const checkProxy = async () => {
+      try {
+        const res = await fetch(`${PROXY_BASE_URL}/health`);
+        if (res.ok) {
+          setProxyStatus("online");
+        } else {
+          setProxyStatus(`error-${res.status}`);
+          console.error(`Proxy check failed: ${res.status} ${res.statusText}`);
+        }
+      } catch (e) {
+        setProxyStatus("offline");
+        console.warn(`Proxy unreachable at ${PROXY_BASE_URL}:`, e.message);
+      }
+    };
+    checkProxy();
+    const interval = setInterval(checkProxy, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // ── Scroll to bottom ──
   useEffect(() => { ceoChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [state.ceoChats, ceoStream]);
@@ -2007,7 +2081,13 @@ export default function ApexOS() {
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {autoRunning && <div style={{ background: `${T.accent}18`, color: T.accent, padding: "4px 12px", borderRadius: 20, fontSize: "0.72rem", fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}><Dots color={T.accent} />AUTO</div>}
-            <div style={{ background: `${T.green}15`, color: T.green, padding: "4px 12px", borderRadius: 20, fontSize: "0.72rem", fontWeight: 600 }}>● APEX Online</div>
+            <div style={{
+              background: proxyStatus === "online" ? `${T.green}15` : proxyStatus === "offline" ? `${T.red}15` : `${T.yellow}15`,
+              color: proxyStatus === "online" ? T.green : proxyStatus === "offline" ? T.red : T.yellow,
+              padding: "4px 12px", borderRadius: 20, fontSize: "0.72rem", fontWeight: 600
+            }}>
+              ● {proxyStatus === "online" ? "APEX Online" : proxyStatus === "offline" ? "Proxy Offline" : proxyStatus.startsWith("error") ? `Proxy Error (${proxyStatus.split('-')[1]})` : "Checking Proxy..."}
+            </div>
             <div style={{ background: T.surf2, border: `1px solid ${T.border2}`, padding: "4px 12px", borderRadius: 20, fontSize: "0.72rem", color: T.text2 }}>{state.tasks.length} tasks</div>
           </div>
         </div>
@@ -2481,9 +2561,18 @@ export default function ApexOS() {
               </div>
 
               <div style={{ background: T.surf, border: `1px solid ${T.border2}`, borderRadius: 14, padding: 20, marginBottom: 16 }}>
-                <div style={{ fontWeight: 700, fontSize: "0.88rem", marginBottom: 10 }}>🔌 AI Backend</div>
-                <div style={{ fontSize: "0.78rem", color: T.text2, lineHeight: 1.6 }}>
-                  {PROXY_BASE_URL ? <>Routing through proxy: <span style={{ color: T.green }}>{PROXY_BASE_URL}</span></> : <>No proxy configured — calling Claude API directly.</>}
+                <div style={{ fontWeight: 700, fontSize: "0.88rem", marginBottom: 12 }}>🔌 AI Backend Proxy</div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ color: T.text2, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: 6 }}>Proxy URL</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input value={state.proxyUrl} onChange={e => dispatch({ type: "SET_PROXY", payload: e.target.value })} style={inputStyle} placeholder="https://your-proxy.com" />
+                    <button onClick={() => dispatch({ type: "SET_PROXY", payload: DEFAULT_PROXY })} style={{ padding: "0 12px", background: T.surf2, border: `1px solid ${T.border2}`, borderRadius: 9, color: T.text2, fontSize: "0.7rem", cursor: "pointer" }}>Reset</button>
+                  </div>
+                </div>
+                <div style={{ fontSize: "0.74rem", color: T.text3, lineHeight: 1.5 }}>
+                  Status: <span style={{ color: proxyStatus === "online" ? T.green : proxyStatus === "offline" ? T.red : T.yellow, fontWeight: 700 }}>{proxyStatus.toUpperCase()}</span>
+                  <br />
+                  Current: <span style={{ fontFamily: "monospace" }}>{PROXY_BASE_URL}</span>
                 </div>
               </div>
 
