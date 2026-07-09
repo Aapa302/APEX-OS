@@ -25,6 +25,7 @@ const { createLogger, logger } = require("./middleware/logger");
 const { errorHandler, notFoundHandler } = require("./middleware/errorHandler");
 const messagesRouter = require("./routes/messages");
 const healthRouter = require("./routes/health");
+const exportRouter = require("./routes/export");
 
 const app = express();
 
@@ -40,9 +41,15 @@ app.use(
 // artifact (running in any Claude.ai tab) can reach the proxy.
 // In production, set CORS_ORIGIN to your specific frontend URL.
 const corsOptions = {
-  origin: config.corsOrigin === "*" ? "*" : config.corsOrigin.split(",").map((s) => s.trim()),
+  origin: (origin, callback) => {
+    const allowed = config.corsOrigin === "*" ? "*" : config.corsOrigin.split(",").map((s) => s.trim());
+    if (allowed === "*") return callback(null, true);
+    if (!origin || allowed.indexOf(origin) !== -1) return callback(null, true);
+    callback(new Error("Not allowed by CORS"));
+  },
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
 };
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // pre-flight
@@ -75,6 +82,7 @@ app.use("/v1", limiter);
 // ── Routes ───────────────────────────────────────────────────
 app.use("/health", healthRouter);
 app.use("/v1/messages", messagesRouter);
+app.use("/v1/export", exportRouter);
 
 // ── 404 ──────────────────────────────────────────────────────
 app.use(notFoundHandler);
