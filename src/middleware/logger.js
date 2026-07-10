@@ -8,7 +8,7 @@ const morgan = require("morgan");
 
 // Custom Morgan format: timestamp method path status response-time
 const DEV_FORMAT = ':date[iso] :method :url :status :response-time ms';
-const PROD_FORMAT = ':remote-addr - :date[iso] ":method :url HTTP/:http-version" :status :res[content-length] :response-time ms';
+const PROD_FORMAT = ':remote-addr - :date[iso] ":method :url HTTP/:http-version" :status :res[content-length] :response-time ms - origin: :req[origin] - ua: :user-agent';
 
 function createLogger() {
   const format = process.env.NODE_ENV === "production" ? PROD_FORMAT : DEV_FORMAT;

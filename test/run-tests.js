@@ -4,6 +4,12 @@
  */
 
 const assert = require("assert");
+
+// Mocking config since geminiService requires it but we're testing translation logic
+// MUST be set before requiring geminiService
+process.env.GEMINI_API_KEY = "dummy_key";
+process.env.AI_PROVIDER = "gemini";
+
 const { toGeminiContents, toAnthropicResponse } = require("../src/services/geminiService");
 
 async function runTests() {
@@ -66,11 +72,7 @@ async function runTests() {
   }
 }
 
-// Mocking config since geminiService requires it but we're testing translation logic
-// We set a dummy API key in env so requireEnv doesn't fail if we were to load config
-process.env.GEMINI_API_KEY = "dummy_key";
-
-// Also mock other env vars if needed
-process.env.AI_PROVIDER = "gemini";
-
-runTests();
+// Only run tests if this file is executed directly
+if (require.main === module) {
+  runTests();
+}
