@@ -12,6 +12,8 @@ const startTime = Date.now();
 router.get("/", (req, res) => {
   res.json({
     status: "ok",
+    apiKeySet: !!config.geminiApiKey,
+    corsOrigin: config.corsOrigin,
     provider: config.aiProvider,
     model: config.geminiModel,
     uptime_seconds: Math.floor((Date.now() - startTime) / 1000),

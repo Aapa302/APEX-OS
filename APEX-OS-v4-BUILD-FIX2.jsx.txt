@@ -186,8 +186,12 @@ const saveLS = (data) => {
 const fetchWithRetry = async (url, options, maxRetries = 3) => {
   let lastErr;
   for (let i = 0; i <= maxRetries; i++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
     try {
-      const res = await fetch(url, options);
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeoutId);
       if (res.status === 429 && i < maxRetries) {
         const delay = Math.pow(2, i + 1) * 1000;
         console.warn(`[ApexOS] Rate limit (429) hit. Retrying in ${delay}ms...`);
@@ -196,12 +200,15 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
       }
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
-        const msg = errBody.error?.message || `API Error ${res.status}`;
+        console.error(`[ApexOS] API Error ${res.status} from ${url}:`, errBody);
+        const msg = errBody.error?.message || `API Error ${res.status}: ${res.statusText || 'Unknown Error'}`;
         throw new Error(msg);
       }
       return res;
     } catch (err) {
+      clearTimeout(timeoutId);
       lastErr = err;
+        console.error(`[ApexOS] Attempt ${i + 1} to ${url} failed:`, err);
       if (i === maxRetries) break;
       const isNetworkError = err.message.includes("Failed to fetch") || err.message.includes("network");
       const delay = Math.pow(2, i + 1) * 1000;
@@ -209,9 +216,11 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
       await new Promise(r => setTimeout(r, delay));
     }
   }
-  const finalMsg = lastErr?.message?.includes("Failed to fetch")
-    ? `Failed to fetch from ${url.split('/v1')[0]}: Connection refused or proxy down. Ensure the backend is running at this address.`
-    : (lastErr?.message || `Request to ${url} failed after multiple retries.`);
+  const finalMsg = lastErr?.name === "AbortError"
+    ? `Request to ${url} timed out after 60 seconds.`
+    : lastErr?.message?.includes("Failed to fetch")
+      ? `Failed to fetch from ${url.split('/v1')[0]}: Connection refused or proxy down. Ensure the backend is running at this address.`
+      : (lastErr?.message || `Request to ${url} failed after multiple retries.`);
   throw new Error(finalMsg);
 };
 
@@ -1080,6 +1089,8 @@ const BuildOrchestrator = {
         }
         files.push({ path: target.path, language: target.language || "text", content: content || `// Empty: ${target.description}` });
         dispatch({ type:"UPDATE_BUILD", id:buildId, payload:{ files:[...files] } });
+        // Small delay between files to avoid anti-flood triggers
+        await new Promise(r => setTimeout(r, 500));
       }
       return files;
     };
@@ -1726,24 +1737,29 @@ export default function ApexOS() {
   // ── Proxy Connectivity Check ──
   useEffect(() => {
     const checkProxy = async () => {
+      const base = PROXY_BASE_URL.replace(/\/+$/, '');
       try {
-        const res = await fetch(`${PROXY_BASE_URL.replace(/\/+$/, '')}/health`);
-        if (res.ok) {
+        // Try /ping first as it's the simplest
+        const pRes = await fetch(`${base}/ping`);
+        if (!pRes.ok) throw new Error(`Ping failed: ${pRes.status}`);
+
+        // Then try /health
+        const hRes = await fetch(`${base}/health`);
+        if (hRes.ok) {
           setProxyStatus("online");
           setProxyDetails("");
         } else {
-          setProxyStatus(`error-${res.status}`);
-          setProxyDetails(`${res.status} ${res.statusText}`);
-          console.error(`Proxy check failed: ${res.status} ${res.statusText}`);
+          setProxyStatus(`error-${hRes.status}`);
+          setProxyDetails(`Health failed: ${hRes.status} ${hRes.statusText}`);
         }
       } catch (e) {
         setProxyStatus("offline");
         setProxyDetails(e.message);
-        console.warn(`Proxy unreachable at ${PROXY_BASE_URL}:`, e.message);
+        console.warn(`Proxy unreachable at ${base}:`, e.message);
       }
     };
     checkProxy();
-    const interval = setInterval(checkProxy, 30000);
+    const interval = setInterval(checkProxy, 15000); // More frequent checks
     return () => clearInterval(interval);
   }, []);
 
