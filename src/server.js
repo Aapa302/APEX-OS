@@ -29,27 +29,25 @@ const exportRouter = require("./routes/export");
 
 const app = express();
 
-// ── Security headers ─────────────────────────────────────────
-app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" }, // allow browser fetches
-  })
-);
+// Required for express-rate-limit to work correctly behind Render/Cloudflare
+app.set('trust proxy', 1);
+
+// ── Minimal diagnostic endpoint ──────────────────────────────
+app.get("/ping", (req, res) => res.send("pong"));
+
+// ── Security headers (Disabled for maximum compatibility in sandbox) ──
+// app.use(helmet());
 
 // ── CORS ─────────────────────────────────────────────────────
-// In development, `corsOrigin` defaults to "*" so the APEX OS
-// artifact (running in any Claude.ai tab) can reach the proxy.
-// In production, set CORS_ORIGIN to your specific frontend URL.
 const corsOptions = {
   origin: (origin, callback) => {
-    const allowed = config.corsOrigin === "*" ? "*" : config.corsOrigin.split(",").map((s) => s.trim());
-    if (allowed === "*") return callback(null, true);
-    if (!origin || allowed.indexOf(origin) !== -1) return callback(null, true);
-    callback(new Error("Not allowed by CORS"));
+    // Totally permissive for sandbox compatibility
+    callback(null, true);
   },
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
   credentials: true,
+  maxAge: 86400,
 };
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // pre-flight

@@ -13,8 +13,11 @@ const express = require("express");
 const { validateMessagesBody } = require("../middleware/validate");
 const { generateContent } = require("../services/geminiService");
 const { logger } = require("../middleware/logger");
+const config = require("../config/env");
 
 const router = express.Router();
+
+router.get("/", (req, res) => res.json({ message: "APEX Gemini Proxy /v1/messages is active." }));
 
 // ── POST /v1/messages ────────────────────────────────────────
 router.post("/", validateMessagesBody, async (req, res, next) => {
@@ -48,6 +51,30 @@ router.post("/", validateMessagesBody, async (req, res, next) => {
     });
   } catch (err) {
     next(err);
+  }
+});
+
+// ── GET /v1/messages/test-gemini ──────────────────────────────
+// Diagnostic endpoint to verify Gemini API key and quota
+router.all("/test-gemini", async (req, res) => {
+  try {
+    const result = await generateContent(
+      [{ role: "user", content: "Say 'Gemini is Online'" }],
+      "You are a diagnostic tool.",
+      { maxTokens: 20, jsonMode: false }
+    );
+    res.json({
+      success: true,
+      message: "Gemini API is working correctly.",
+      model: config.geminiModel,
+      response: result.content,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message,
+      details: err.details || null,
+    });
   }
 });
 

@@ -52,7 +52,7 @@ function notFoundHandler(req, res) {
     error: {
       type: "not_found",
       message: `Route ${req.method} ${req.path} not found.`,
-      hint: "The only endpoint is POST /v1/messages",
+      hint: "Check /health for system status or /v1/messages for API calls.",
     },
   });
 }
