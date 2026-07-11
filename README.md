@@ -71,7 +71,7 @@ The proxy will be available at `http://localhost:8787`.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GEMINI_API_KEY` | **Required** Your Google Gemini API Key | |
-| `GEMINI_MODEL` | The Gemini model to use | `gemini-2.0-flash` |
+| `GEMINI_MODEL` | The Gemini model to use | `gemini-2.5-flash` |
 | `PORT` | Port to run the proxy on | `8787` |
 | `CORS_ORIGIN` | Allowed origins (comma-separated) | `*` |
 | `RATE_LIMIT_WINDOW_MS` | Rate limit window in milliseconds | `60000` |
