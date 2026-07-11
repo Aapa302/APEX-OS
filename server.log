@@ -1,0 +1,14 @@
+
+> apex-gemini-proxy@1.0.0 start
+> node src/server.js
+
+{"ts":"2026-07-11T10:09:47.314Z","level":"info","message":"APEX Gemini Proxy running","data":{"port":8787,"env":"development","provider":"gemini","model":"gemini-2.0-flash","cors":"*","rateLimitPerMin":120}}
+{"ts":"2026-07-11T10:09:47.315Z","level":"info","message":"Proxy endpoint: http://localhost:8787/v1/messages"}
+{"ts":"2026-07-11T10:09:47.316Z","level":"info","message":"Health check:   http://localhost:8787/health"}
+[GeminiService] Attempting: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+[GeminiService] https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent returned 400: API key not valid. Please pass a valid API key.
+[GeminiService] Attempting: https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent
+[GeminiService] https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent returned 400: Invalid JSON payload received. Unknown name "systemInstruction": Cannot find field.
+[GeminiService] Attempting: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent
+[GeminiService] https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent returned 400: API key not valid. Please pass a valid API key.
+2026-07-11T10:09:48.935Z GET /v1/messages/test-gemini 400 175.661 ms

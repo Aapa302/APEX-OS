@@ -190,7 +190,14 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
     try {
-      const res = await fetch(url, { ...options, signal: controller.signal });
+      const fetchOptions = {
+        ...options,
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'omit', // Standard for cross-origin proxy
+      };
+
+      const res = await fetch(url, fetchOptions);
       clearTimeout(timeoutId);
       if (res.status === 429 && i < maxRetries) {
         const delay = Math.pow(2, i + 1) * 1000;
@@ -202,6 +209,11 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
         const errBody = await res.json().catch(() => ({}));
         console.error(`[ApexOS] API Error ${res.status} from ${url}:`, errBody);
         const msg = errBody.error?.message || `API Error ${res.status}: ${res.statusText || 'Unknown Error'}`;
+
+        // If it's a quota error, add extra context
+        if (res.status === 429) {
+          throw new Error(`QUOTA EXCEEDED: ${msg}. Try changing the model in Settings.`);
+        }
         throw new Error(msg);
       }
       return res;
@@ -229,7 +241,10 @@ const callClaude = async (messages, system, onStream) => {
   const endpoint = `${PROXY_BASE_URL || "https://api.anthropic.com"}/v1/messages`;
   const res = await fetchWithRetry(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest"
+    },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
       max_tokens: 1000,

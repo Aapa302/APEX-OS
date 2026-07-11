@@ -11,7 +11,7 @@
 
 const express = require("express");
 const { validateMessagesBody } = require("../middleware/validate");
-const { generateContent } = require("../services/geminiService");
+const { generateContent, listModels } = require("../services/geminiService");
 const { logger } = require("../middleware/logger");
 const config = require("../config/env");
 
@@ -74,6 +74,20 @@ router.all("/test-gemini", async (req, res) => {
       success: false,
       message: err.message,
       details: err.details || null,
+    });
+  }
+});
+
+// ── GET /v1/messages/list-models ──────────────────────────────
+// Diagnostic endpoint to see which models this API key has access to
+router.get("/list-models", async (req, res) => {
+  try {
+    const models = await listModels();
+    res.json({ success: true, count: models.length, models });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message,
     });
   }
 });

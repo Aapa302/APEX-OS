@@ -12,12 +12,16 @@ function errorHandler(err, req, res, next) {
 
   if (err instanceof GeminiError) {
     const status = err.status || 502;
-    console.error(`[GeminiError] ${status} ${err.message}`, isDev && err.details ? err.details : "");
+    // Always include details for Quota errors so frontend can show why it failed
+    const isQuota = status === 429 || err.message.toLowerCase().includes("quota");
+
+    console.error(`[GeminiError] ${status} ${err.message}`, (isDev || isQuota) && err.details ? err.details : "");
+
     return res.status(status).json({
       error: {
-        type: "gemini_error",
+        type: isQuota ? "rate_limit" : "gemini_error",
         message: err.message,
-        ...(isDev && err.details ? { details: err.details } : {}),
+        ...( (isDev || isQuota) && err.details ? { details: err.details } : {}),
       },
     });
   }
