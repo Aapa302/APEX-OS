@@ -77,6 +77,15 @@ The proxy will be available at `http://localhost:8787`.
 | `RATE_LIMIT_WINDOW_MS` | Rate limit window in milliseconds | `60000` |
 | `RATE_LIMIT_MAX_REQUESTS` | Max requests per window per IP | `60` |
 
+## Troubleshooting Connectivity
+
+If you see "Proxy Offline" or "Connection refused" in the APEX OS frontend:
+
+1.  **Mixed Content**: If your frontend is served over HTTPS (e.g., `claude.ai`), your backend **must** also use HTTPS. Use a service like Render, Heroku, or a tunnel like Cloudflare Quick Tunnel/ngrok for development.
+2.  **CORS**: Ensure the backend's `CORS_ORIGIN` environment variable includes your frontend's domain (or set it to `*` for testing).
+3.  **Browser Extensions**: Privacy extensions (like uBlock Origin or Privacy Badger) sometimes block `onrender.com` or other free hosting domains. Try disabling them for the APEX OS tab.
+4.  **Cold Starts**: If using Render's free tier, the first request after 15 minutes of inactivity can take up to 60 seconds to respond. The frontend has a 60s timeout to accommodate this.
+
 ## Testing
 
 Run the test suite:

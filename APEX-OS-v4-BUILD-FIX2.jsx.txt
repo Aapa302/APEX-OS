@@ -190,7 +190,14 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
     try {
-      const res = await fetch(url, { ...options, signal: controller.signal });
+      const fetchOptions = {
+        ...options,
+        signal: controller.signal,
+        mode: 'cors',
+        credentials: 'omit', // Standard for cross-origin proxy
+      };
+
+      const res = await fetch(url, fetchOptions);
       clearTimeout(timeoutId);
       if (res.status === 429 && i < maxRetries) {
         const delay = Math.pow(2, i + 1) * 1000;
@@ -202,6 +209,11 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
         const errBody = await res.json().catch(() => ({}));
         console.error(`[ApexOS] API Error ${res.status} from ${url}:`, errBody);
         const msg = errBody.error?.message || `API Error ${res.status}: ${res.statusText || 'Unknown Error'}`;
+
+        // If it's a quota error, add extra context
+        if (res.status === 429) {
+          throw new Error(`QUOTA EXCEEDED: ${msg}. Try changing the model in Settings.`);
+        }
         throw new Error(msg);
       }
       return res;
@@ -229,7 +241,10 @@ const callClaude = async (messages, system, onStream) => {
   const endpoint = `${PROXY_BASE_URL || "https://api.anthropic.com"}/v1/messages`;
   const res = await fetchWithRetry(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest"
+    },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
       max_tokens: 1000,
@@ -1738,30 +1753,36 @@ export default function ApexOS() {
   useEffect(() => {
     const checkProxy = async () => {
       const base = PROXY_BASE_URL.replace(/\/+$/, '');
+      const start = Date.now();
       try {
         // Try /ping first as it's the simplest
-        const pRes = await fetch(`${base}/ping`);
-        if (!pRes.ok) throw new Error(`Ping failed: ${pRes.status}`);
+        const pRes = await fetch(`${base}/ping`, { mode: 'cors', cache: 'no-cache' });
+        if (!pRes.ok) throw new Error(`Ping failed: ${pRes.status} ${pRes.statusText}`);
 
         // Then try /health
-        const hRes = await fetch(`${base}/health`);
+        const hRes = await fetch(`${base}/health`, { mode: 'cors', cache: 'no-cache' });
+        const latency = Date.now() - start;
         if (hRes.ok) {
           setProxyStatus("online");
-          setProxyDetails("");
+          setProxyDetails(`Connected to ${base} (${latency}ms)`);
         } else {
           setProxyStatus(`error-${hRes.status}`);
-          setProxyDetails(`Health failed: ${hRes.status} ${hRes.statusText}`);
+          setProxyDetails(`Backend returned ${hRes.status} ${hRes.statusText}. Check server logs.`);
         }
       } catch (e) {
         setProxyStatus("offline");
-        setProxyDetails(e.message);
-        console.warn(`Proxy unreachable at ${base}:`, e.message);
+        let msg = e.message;
+        if (msg === "Failed to fetch") {
+          msg = "Network Error: Failed to fetch. Possible causes: 1. Server is down. 2. CORS block. 3. Mixed Content (HTTP vs HTTPS). 4. Browser extension (AdBlock/Privacy) blocking the Render domain.";
+        }
+        setProxyDetails(msg);
+        console.warn(`[Proxy Check] Unreachable at ${base}:`, e);
       }
     };
     checkProxy();
-    const interval = setInterval(checkProxy, 15000); // More frequent checks
+    const interval = setInterval(checkProxy, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [state.proxyUrl]);
 
   // ── Scroll to bottom ──
   useEffect(() => { ceoChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [state.ceoChats, ceoStream]);
@@ -2591,19 +2612,39 @@ export default function ApexOS() {
                 </div>
                 <div style={{ fontSize: "0.74rem", color: T.text3, lineHeight: 1.5 }}>
                   Status: <span style={{ color: proxyStatus === "online" ? T.green : proxyStatus === "offline" ? T.red : T.yellow, fontWeight: 700 }}>{proxyStatus.toUpperCase()}</span>
-                  {proxyDetails && <div style={{ color: T.red, fontSize: "0.65rem", marginTop: 4 }}>Error: {proxyDetails}</div>}
                   <div style={{ marginTop: 8 }}>
-                    Current: <span style={{ fontFamily: "monospace", wordBreak: "break-all" }}>{PROXY_BASE_URL}</span>
+                    Endpoint: <span style={{ fontFamily: "monospace", wordBreak: "break-all", color: T.text2 }}>{PROXY_BASE_URL}</span>
                   </div>
+                  {proxyDetails && (
+                    <div style={{
+                      marginTop: 10, padding: "8px 12px", background: T.surf2, borderRadius: 8,
+                      borderLeft: `3px solid ${proxyStatus === "online" ? T.green : T.red}`,
+                      color: proxyStatus === "online" ? T.text2 : T.red,
+                      fontSize: "0.7rem", lineHeight: 1.4
+                    }}>
+                      <strong>Connection Log:</strong><br/>
+                      {proxyDetails}
+                    </div>
+                  )}
                   <button
                     onClick={async () => {
                       toast("Testing connection...", "info");
+                      const base = PROXY_BASE_URL.replace(/\/+$/, '');
                       try {
-                        const res = await fetch(`${PROXY_BASE_URL.replace(/\/+$/, '')}/health`);
-                        if (res.ok) toast("Health check passed!", "success");
-                        else toast(`Health check failed: ${res.status}`, "error");
+                        const res = await fetch(`${base}/health`, { mode: 'cors', cache: 'no-cache' });
+                        if (res.ok) {
+                          const data = await res.json();
+                          toast(`Success! Model: ${data.model}`, "success");
+                          setProxyStatus("online");
+                          setProxyDetails(`Manual check passed: ${data.model}`);
+                        } else {
+                          toast(`Failed: ${res.status}`, "error");
+                          setProxyStatus(`error-${res.status}`);
+                        }
                       } catch (e) {
                         toast(`Network error: ${e.message}`, "error");
+                        setProxyStatus("offline");
+                        setProxyDetails(e.message === "Failed to fetch" ? "Failed to fetch (CORS or Network Error)" : e.message);
                       }
                     }}
                     style={{ marginTop: 10, padding: "6px 12px", background: T.surf2, border: `1px solid ${T.border2}`, borderRadius: 8, color: T.text1, fontSize: "0.7rem", cursor: "pointer" }}
