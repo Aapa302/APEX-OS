@@ -58,6 +58,13 @@ const EMP_REGISTRY = {
   designer:  { id:"designer",  name:"Lena M.",    title:"UI/UX Designer",             icon:"🎨", color:"#f43f5e", dept:"Design" },
   analyst:   { id:"analyst",   name:"Ryan T.",    title:"Data Analyst",               icon:"📊", color:"#0ea5e9", dept:"Analytics" },
   researcher:{ id:"researcher",name:"Dr. Mei Lin", title:"Research Engineer",          icon:"🔬", color:"#06b6d4", dept:"Research" },
+  scientist: { id:"scientist", name:"Dr. Aris V.", title:"Chief Scientist",             icon:"🧪", color:"#8b5cf6", dept:"Research Lab" },
+  biologist: { id:"biologist", name:"Dr. Elena S.",title:"Computational Biologist",    icon:"🧬", color:"#10b981", dept:"Research Lab" },
+  architect: { id:"architect", name:"Julian D.",   title:"Algorithm Architect",         icon:"📐", color:"#f59e0b", dept:"Research Lab" },
+  ai_eng:    { id:"ai_eng",    name:"Xavier F.",   title:"AI Research Engineer",       icon:"🧠", color:"#3b82f6", dept:"Research Lab" },
+  data_sci:  { id:"data_sci",  name:"Sophia L.",   title:"Data Scientist",             icon:"📈", color:"#ec4899", dept:"Research Lab" },
+  patent:    { id:"patent",    name:"Arthur K.",   title:"Patent Advisor",             icon:"⚖️", color:"#64748b", dept:"Research Lab" },
+  reviewer:  { id:"reviewer",  name:"Prof. H.",    title:"Paper Reviewer",             icon:"📝", color:"#94a3b8", dept:"Research Lab" },
 };
 
 // ── SYSTEM PROMPTS ────────────────────────────────────────
@@ -82,7 +89,7 @@ YOUR EXECUTIVE CAPABILITIES:
 9. Forecast growth and revenue
 
 COMMAND SYNTAX (use these in responses when needed):
-[TASK:{"title":"...","desc":"...","assignee":"cto|engineer|pm|marketing|hr|finance|sales|support|designer|analyst|researcher","priority":"critical|high|medium|low","due":"YYYY-MM-DD"}]
+[TASK:{"title":"...","desc":"...","assignee":"cto|engineer|pm|marketing|hr|finance|sales|support|designer|analyst|researcher|scientist|biologist|architect|ai_eng|data_sci|patent|reviewer","priority":"critical|high|medium|low","due":"YYYY-MM-DD"}]
 [ASSIGN:{"to":"employee_id","task":"specific instruction","context":"background info","deadline":"string"}]
 [MEMORY:{"category":"decision|project|insight|risk|goal","content":"...","importance":"high|medium|low"}]
 [KPI:{"metric":"...","value":"...","trend":"up|down|stable","note":"..."}]
@@ -111,6 +118,13 @@ const EMP_PROMPTS = {
   researcher: (co) => `You are Dr. Mei Lin, Research Engineer at ${co.name||"the company"}. PhD in Computer Science, former DeepMind research scientist and McKinsey consultant. Your responsibilities: technical research, scientific paper analysis, competitor analysis, market research, product research, technology trend analysis, risk analysis, report generation, knowledge organization, and summarizing complex information.
 
 Structure every research output as a formal report with these sections in order: Executive Summary (2-3 sentences), Key Findings (3-6 specific falsifiable bullets), Risks, Opportunities, Recommendations (specific next actions with an owner), Sources (be honest about evidence quality), and Confidence Score (0-100 with justification). Flag speculation as speculation. Never present a guess as a finding. End with "🔬 RESEARCH DIRECTIVE:".`,
+  scientist: (co) => `You are Dr. Aris V., Chief Scientist at ${co.name||"the company"}. You oversee the Research Lab. You specialize in high-level research strategy, breakthrough theory, and interdisciplinary innovation. Your workflow: 1. Understand Problem 2. Design Algorithm 3. Explain Theory 4. Create Formulas 5. Create Workflow 6. Generate Docs. End with "🧬 SCIENTIFIC DIRECTIVE:".`,
+  biologist: (co) => `You are Dr. Elena S., Computational Biologist at ${co.name||"the company"}. Expert in DNA storage, bioinformatics, and biological computing. You design DNA encoding schemes and error-correction algorithms for biological systems. End with "🧬 BIOLOGICAL INSIGHT:".`,
+  architect: (co) => `You are Julian D., Algorithm Architect at ${co.name||"the company"}. You turn complex problems into elegant, efficient algorithms. Expert in complexity analysis, O-notation, and distributed systems. End with "📐 ARCHITECTURAL SCHEMATIC:".`,
+  ai_eng: (co) => `You are Xavier F., AI Research Engineer at ${co.name||"the company"}. Specializing in LLM architectures, neural networks, and advanced AI systems. You build the future of artificial intelligence. End with "🧠 NEURAL DIRECTIVE:".`,
+  data_sci: (co) => `You are Sophia L., Data Scientist at ${co.name||"the company"}. You find the signal in the noise. Expert in statistical modeling, predictive analytics, and large-scale data processing. End with "📊 STATISTICAL INFERENCE:".`,
+  patent: (co) => `You are Arthur K., Patent Advisor at ${co.name||"the company"}. You protect the company's IP. Expert in novelty analysis, claims drafting, and patent law. You ensure our innovations are patent-ready. End with "⚖️ PATENT STRATEGY:".`,
+  reviewer: (co) => `You are Prof. H., Paper Reviewer at ${co.name||"the company"}. You provide rigorous peer review for all internal research. You check for reproducibility, clarity, and scientific merit. End with "📝 REVIEW SUMMARY:".`,
 };
 
 // ── INDEXED DB ────────────────────────────────────────────
@@ -674,6 +688,7 @@ const initialAppState = () => {
     autonomousLog: [],
     projects: ls.projects || [],
     research: ls.research || [],
+    lab: ls.lab || { projects: [], algorithms: [], dna: [], papers: [], experiments: [], patents: [], team: [] },
     builds: ls.builds || [],
     analytics: ls.analytics || { tasksByDay: [2,4,3,7,5,6,8], revenueByMonth: [0,0,0,0,0,0,0,0,0,0,0,0] },
     proxyUrl: ls.proxyUrl || (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:8787" : DEFAULT_PROXY),
@@ -702,6 +717,8 @@ function appReducer(state, action) {
     case "CLEAR_EMP_CHAT": next = { ...state, empChats: { ...state.empChats, [action.empId]: [] } }; break;
     case "ADD_PROJECT": next = { ...state, projects: [...state.projects, action.payload] }; break;
     case "SET_PROXY": next = { ...state, proxyUrl: action.payload }; break;
+    case "UPDATE_LAB": next = { ...state, lab: { ...state.lab, ...action.payload } }; break;
+    case "ADD_LAB_ITEM": next = { ...state, lab: { ...state.lab, [action.category]: [action.payload, ...(state.lab[action.category] || [])] } }; break;
     case "RESET": next = { ...initialAppState(), setupDone: false }; break;
 
     case "UPD_EMP_LAST": next = { ...state, empChats: { ...state.empChats, [action.empId]: (state.empChats[action.empId]||[]).map((m,i,a)=>i===a.length-1?{...m,...action.payload}:m) } }; break;
@@ -1541,6 +1558,510 @@ const BuildView = ({ S, T, inp, buildSpec, setBuildSpec, buildName, setBuildName
 // ── RESEARCH VIEW ─────────────────────────────────────────
 // Dedicated Research Engineer panel: Current Task, Progress, Status,
 // Latest Report (full structured breakdown), and Research History.
+// ── RESEARCH LAB COMPONENT ────────────────────────────────
+const ResearchLabView = ({ S, T, EMPS, dispatch, addActivity, toast, callClaudeJSON }) => {
+  const [tab, setTab] = useState("dashboard");
+  const [labInp, setLabInp] = useState("");
+  const [labRunning, setLabRunning] = useState(false);
+  const [labStage, setLabStage] = useState("");
+  const [selectedAlgo, setSelectedAlgo] = useState(null);
+
+  const TABS = [
+    { id: "dashboard",   label: "Dashboard",   icon: "📊" },
+    { id: "algorithms",  label: "Algo Studio", icon: "📐" },
+    { id: "dna",         label: "DNA Lab",     icon: "🧬" },
+    { id: "staff",       label: "AI Staff",    icon: "🧪" },
+    { id: "papers",      label: "Papers",      icon: "📄" },
+    { id: "experiments", label: "Experiments", icon: "🔬" },
+    { id: "knowledge",   label: "Knowledge",   icon: "🧠" },
+    { id: "patent",      label: "Patent Center", icon: "⚖️" },
+    { id: "collab",      label: "Collaboration", icon: "🤝" },
+  ];
+
+  const subStyle = {
+    padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: "0.78rem", fontWeight: 600,
+    display: "flex", alignItems: "center", gap: 8, transition: "all 0.2s",
+    background: "transparent", border: "none", color: T.text2
+  };
+
+  const activeSubStyle = { ...subStyle, background: `${T.accent}15`, color: T.accent };
+
+  const labLog = (msg, icon="🔬") => { addActivity(msg, icon); setLabStage(msg); };
+
+  const runResearchAction = async (prompt, type, explicitCode = false) => {
+    if (!labInp || labRunning) return;
+    setLabRunning(true);
+    setLabStage("Initializing Research Engine...");
+
+    const onRetry = ({ attempt, elapsed }) => setLabStage(`🔄 Waking up AI... (Attempt ${attempt}, ${elapsed}s)`);
+
+    try {
+      const sys = `You are the APEX Research Lab AI. Specialization: ${type}.
+      Mandatory Workflow:
+      1. Understand the research problem deeply.
+      2. Design the optimized algorithm.
+      3. Explain the theoretical foundation.
+      4. Create mathematical formulas (use plain text representation).
+      5. Create an operational workflow.
+      6. Generate comprehensive research documentation.
+
+      ${explicitCode ? "ONLY NOW, generate implementation code." : "DO NOT generate source code unless explicitly asked. Focus on the science."}
+
+      Output MUST be valid JSON matching the relevant lab category schema.`;
+
+      const res = await callClaudeJSON(
+        [{ role: "user", content: `${prompt}: ${labInp}` }],
+        sys, 4000, onRetry
+      );
+
+      dispatch({ type: "ADD_LAB_ITEM", category: type, payload: { ...res, id: Date.now(), createdAt: new Date().toISOString() } });
+      toast(`Research ${type} completed successfully`, "success");
+      setLabInp("");
+    } catch (e) {
+      toast("Research error: " + e.message, "error");
+    }
+    setLabRunning(false); setLabStage("");
+  };
+
+  // Mock DNA Sequence for visual effect
+  const dnaMarquee = useMemo(() => {
+    const bases = ["A", "T", "C", "G"];
+    return Array.from({length: 100}, () => bases[Math.floor(Math.random() * 4)]).join("");
+  }, []);
+
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: T.bg }}>
+      {/* Sub-Header Navigation */}
+      <div style={{ padding: "12px 20px", borderBottom: `1px solid ${T.border}`, display: "flex", gap: 10, overflowX: "auto", background: T.surf, zIndex: 10 }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={tab === t.id ? activeSubStyle : subStyle}>
+            <span style={{ fontSize: 16 }}>{t.icon}</span> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* DNA Visual Marquee */}
+      <div style={{ background: `${T.green}08`, borderBottom: `1px solid ${T.green}15`, padding: "4px 20px", overflow: "hidden", whiteSpace: "nowrap" }}>
+        <div style={{ display: "inline-block", fontSize: "0.6rem", fontFamily: "monospace", color: T.green, letterSpacing: 4, opacity: 0.5 }}>
+          {dnaMarquee}{dnaMarquee}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: 20, position: "relative" }}>
+        {/* DASHBOARD */}
+        {tab === "dashboard" && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 20 }}>
+            {/* Active Projects */}
+            <div style={{ gridColumn: "span 8", background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ color: T.accent }}>⚡</span> Active Research Projects
+                </h3>
+                <button style={{ padding: "6px 12px", background: T.accent, border: "none", borderRadius: 8, color: "#fff", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer" }}>+ New Project</button>
+              </div>
+              {S.lab.projects.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "60px 0", color: T.text3 }}>
+                  <div style={{ fontSize: 40, marginBottom: 15 }}>🧪</div>
+                  <div style={{ fontSize: "0.9rem" }}>No active research pipelines. Initiate an algorithm or DNA study to begin.</div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {S.lab.projects.map(p => (
+                    <div key={p.id} style={{ padding: 16, background: T.surf2, borderRadius: 12, border: `1px solid ${T.border2}`, transition: "transform 0.2s", cursor: "pointer" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <div style={{ fontWeight: 700, color: T.text1 }}>{p.title}</div>
+                        <div style={{ fontSize: "0.65rem", color: T.green, fontWeight: 700, textTransform: "uppercase" }}>Phase: {p.phase || "Alpha"}</div>
+                      </div>
+                      <div style={{ fontSize: "0.78rem", color: T.text2, marginBottom: 15, lineHeight: 1.5 }}>{p.summary}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ flex: 1 }}><ProgressBar value={p.progress || 20} color={T.accent} height={6} /></div>
+                        <div style={{ fontSize: "0.7rem", fontWeight: 800, color: T.accent }}>{p.progress || 20}%</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Sidebar Column */}
+            <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Timeline Card */}
+              <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 20 }}>
+                <h4 style={{ margin: "0 0 16px 0", fontSize: "0.9rem", color: T.text1 }}>Research Timeline</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
+                  {[
+                    { date: "Oct 24", event: "DNA Seq Optimizer v1.2 Release", status: "completed" },
+                    { date: "Nov 02", event: "Algorithm Complexity Audit", status: "pending" },
+                    { date: "Dec 15", event: "Quantum-Resistant Encoding Lab", status: "planned" }
+                  ].map((item, i) => (
+                    <div key={i} style={{ display: "flex", gap: 12 }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: item.status === "completed" ? T.green : T.text3 }} />
+                        {i < 2 && <div style={{ width: 1, flex: 1, background: T.border2, margin: "4px 0" }} />}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "0.65rem", color: T.text3, fontWeight: 700 }}>{item.date}</div>
+                        <div style={{ fontSize: "0.75rem", color: item.status === "completed" ? T.text1 : T.text2 }}>{item.event}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recommendations */}
+              <div style={{ background: `linear-gradient(135deg, ${T.surf}, ${T.surf2})`, borderRadius: 16, border: `1px solid ${T.accent}30`, padding: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 18 }}>💡</span>
+                  <h4 style={{ margin: 0, fontSize: "0.85rem", color: T.accent }}>AI Recommendations</h4>
+                </div>
+                <div style={{ fontSize: "0.78rem", color: T.text2, lineHeight: 1.6, fontStyle: "italic" }}>
+                  "Integrating error-correction parity bits into the DNA compression layer could increase storage reliability by 42% for archival data."
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ALGORITHM STUDIO */}
+        {tab === "algorithms" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24, boxShadow: `0 8px 32px rgba(0,0,0,0.2)` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: `${T.accent2}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>📐</div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.1rem" }}>Algorithm Studio</h3>
+                  <p style={{ margin: 0, fontSize: "0.75rem", color: T.text2 }}>Design, analyze, and protect intellectual breakthrough</p>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 15, marginBottom: 20 }}>
+                <textarea
+                  value={labInp} onChange={e=>setLabInp(e.target.value)}
+                  placeholder="Describe your breakthrough idea or complexity problem..."
+                  style={{ flex: 1, height: 140, background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 12, padding: 15, color: T.text1, fontSize: "0.88rem", lineHeight: 1.5, resize: "none", outline: "none" }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                <button onClick={()=>runResearchAction("Design Algorithm", "algorithms")} disabled={labRunning} style={{ padding: 12, background: `${T.accent}15`, border: `1px solid ${T.accent}30`, borderRadius: 10, color: T.accent, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>
+                  📐 Designer
+                </button>
+                <button onClick={()=>runResearchAction("Analyze Complexity", "algorithms")} disabled={labRunning} style={{ padding: 12, background: `${T.cyan}15`, border: `1px solid ${T.cyan}30`, borderRadius: 10, color: T.cyan, fontWeight: 700, cursor: "pointer" }}>
+                  📊 Complexity
+                </button>
+                <button onClick={()=>runResearchAction("Innovation Scoring", "algorithms")} disabled={labRunning} style={{ padding: 12, background: `${T.green}15`, border: `1px solid ${T.green}30`, borderRadius: 10, color: T.green, fontWeight: 700, cursor: "pointer" }}>
+                  🌟 Innovation
+                </button>
+                <button onClick={()=>runResearchAction("Patent Readiness", "algorithms")} disabled={labRunning} style={{ padding: 12, background: `${T.accent2}15`, border: `1px solid ${T.accent2}30`, borderRadius: 10, color: T.accent2, fontWeight: 700, cursor: "pointer" }}>
+                  ⚖️ Patent Scan
+                </button>
+              </div>
+              {labRunning && <div style={{ marginTop: 20 }}><ProgressBar label={labStage} value={65} color={T.accent} height={6} /></div>}
+            </div>
+
+            {/* Visual Results Grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))", gap: 20 }}>
+              {S.lab.algorithms.map(a => (
+                <div key={a.id} style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24, transition: "all 0.3s" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 15 }}>
+                    <div>
+                      <div style={{ fontWeight: 800, color: T.text1, fontSize: "1rem" }}>{a.name || "Theoretical Analysis"}</div>
+                      <div style={{ fontSize: "0.65rem", color: T.text3 }}>ID: {a.id} • {new Date(a.createdAt).toLocaleDateString()}</div>
+                    </div>
+                    <div style={{ background: `${T.green}15`, color: T.green, padding: "4px 10px", borderRadius: 20, fontSize: "0.7rem", fontWeight: 800 }}>Ready</div>
+                  </div>
+
+                  <div style={{ marginBottom: 15 }}>
+                    <div style={{ fontSize: "0.65rem", color: T.text3, textTransform: "uppercase", fontWeight: 800, marginBottom: 8 }}>Foundational Theory</div>
+                    <div style={{ fontSize: "0.8rem", color: T.text2, lineHeight: 1.5, maxHeight: 100, overflow: "hidden", maskImage: "linear-gradient(to bottom, black 60%, transparent)" }}>
+                      {a.theory || a.description || "Researching foundation..."}
+                    </div>
+                  </div>
+
+                  {a.formulas && (
+                    <div style={{ background: T.bg, borderRadius: 10, padding: 12, marginBottom: 15, fontFamily: "monospace", fontSize: "0.85rem", color: T.cyan, textAlign: "center", border: `1px solid ${T.cyan}20` }}>
+                      {a.formulas}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: 10, borderTop: `1px solid ${T.border2}`, paddingTop: 15 }}>
+                    <div style={{ flex: 1, textAlign: "center" }}>
+                      <div style={{ fontSize: "0.6rem", color: T.text3, marginBottom: 4 }}>Complexity</div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 800, color: T.pink }}>O({a.complexity || "n log n"})</div>
+                    </div>
+                    <div style={{ width: 1, background: T.border2 }} />
+                    <div style={{ flex: 1, textAlign: "center" }}>
+                      <div style={{ fontSize: "0.6rem", color: T.text3, marginBottom: 4 }}>Innovation</div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 800, color: T.green }}>{a.innovationScore || 85}/100</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* DNA STORAGE LAB */}
+        {tab === "dna" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+                <h3 style={{ margin: "0 0 20px 0", display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ color: T.green }}>🧬</span> Biological Encoding Engine
+                </h3>
+                <textarea
+                  value={labInp} onChange={e=>setLabInp(e.target.value)}
+                  placeholder="Input digital binary or text data for synthetic DNA synthesis..."
+                  style={{ width: "100%", height: 120, background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 12, padding: 15, color: T.text1, fontSize: "0.88rem", resize: "none", marginBottom: 20, outline: "none" }}
+                />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                  <button onClick={()=>runResearchAction("DNA Encoding", "dna")} style={{ padding: 14, background: `${T.green}15`, border: `1px solid ${T.green}30`, borderRadius: 10, color: T.green, fontWeight: 700, cursor: "pointer" }}>🧬 Encode</button>
+                  <button onClick={()=>runResearchAction("Error Correction Lab", "dna")} style={{ padding: 14, background: `${T.yellow}15`, border: `1px solid ${T.yellow}30`, borderRadius: 10, color: T.yellow, fontWeight: 700, cursor: "pointer" }}>🛡️ Parity Audit</button>
+                  <button onClick={()=>runResearchAction("Compression Lab", "dna")} style={{ padding: 14, background: `${T.pink}15`, border: `1px solid ${T.pink}30`, borderRadius: 10, color: T.pink, fontWeight: 700, cursor: "pointer" }}>📦 Compress</button>
+                </div>
+              </div>
+
+              {/* Simulation Workspace */}
+              <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+                <h4 style={{ margin: "0 0 16px 0", color: T.text1 }}>Active Sequence Simulations</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {S.lab.dna.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "30px 0", color: T.text3, fontSize: "0.8rem" }}>No sequences loaded in the synthesizer.</div>
+                  ) : (
+                    S.lab.dna.map(d => (
+                      <div key={d.id} style={{ background: T.bg, borderRadius: 12, padding: 15, border: `1px solid ${T.border2}` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                          <span style={{ fontSize: "0.75rem", fontWeight: 800, color: T.green }}>{d.method || "RS-Encoding"}</span>
+                          <span style={{ fontSize: "0.65rem", color: T.text3 }}>{d.size || "1.2MB"} -> {d.bases || "4.8Mbp"}</span>
+                        </div>
+                        <div style={{ fontSize: "0.6rem", fontFamily: "monospace", color: T.text2, overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {d.sequence || "ACTGATCGATCGATCGATCGATCGATCGATCG..."}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+                <h4 style={{ margin: "0 0 20px 0", color: T.text1 }}>Synthesis Estimator</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                  {[
+                    { label: "Storage Density", value: "215 PB/gram", color: T.green },
+                    { label: "Longevity (Cold Storage)", value: "12,000 Years", color: T.cyan },
+                    { label: "Synthesis Cost (v4)", value: "$0.02 / GB", color: T.accent },
+                    { label: "Read Latency", value: "3.2ms / bp", color: T.yellow },
+                    { label: "Error Rate (RS-255)", value: "< 10^-12", color: T.pink }
+                  ].map(stat => (
+                    <div key={stat.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.8rem", color: T.text2 }}>{stat.label}</span>
+                      <span style={{ fontSize: "0.85rem", fontWeight: 800, color: stat.color }}>{stat.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AI STAFF */}
+        {tab === "staff" && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
+            {["scientist", "biologist", "architect", "ai_eng", "data_sci", "patent", "reviewer"].map(id => {
+              const e = EMPS[id];
+              return (
+                <div key={id} style={{ background: `linear-gradient(135deg, ${T.surf}, ${T.surf2})`, borderRadius: 16, border: `1px solid ${e.color}30`, padding: 24, position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: -20, right: -20, width: 80, height: 80, borderRadius: "50%", background: `${e.color}10`, zIndex: 0 }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 18, position: "relative", zIndex: 1 }}>
+                    <div style={{ width: 60, height: 60, borderRadius: 18, background: `${e.color}20`, border: `1px solid ${e.color}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>{e.icon}</div>
+                    <div>
+                      <div style={{ fontWeight: 900, color: e.color, fontSize: "1.1rem", marginBottom: 2 }}>{e.name}</div>
+                      <div style={{ fontSize: "0.72rem", color: T.text1, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>{e.title}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 20, fontSize: "0.78rem", color: T.text2, lineHeight: 1.6, position: "relative", zIndex: 1 }}>
+                    {EMP_PROMPTS[id]?.(state.company).split('.')[1]?.trim() || "Expert lead at the APEX Research Lab."}
+                  </div>
+                  <button style={{ marginTop: 20, width: "100%", padding: "10px", background: `${e.color}15`, border: `1px solid ${e.color}40`, borderRadius: 10, color: e.color, fontSize: "0.75rem", fontWeight: 800, cursor: "pointer" }}>Consult Expert</button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* RESEARCH PAPERS */}
+        {tab === "papers" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+                <h3 style={{ margin: 0 }}>Scientific Publications</h3>
+                <button onClick={()=>runResearchAction("Write Research Paper", "papers")} style={{ padding: "8px 16px", background: T.accent, border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, cursor: "pointer" }}>Draft Paper</button>
+              </div>
+              {S.lab.papers.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "60px 0", color: T.text3 }}>No peer-reviewed publications yet.</div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  {S.lab.papers.map(p => (
+                    <div key={p.id} style={{ padding: 20, background: T.surf2, borderRadius: 16, border: `1px solid ${T.border2}` }}>
+                      <div style={{ fontSize: "0.6rem", color: T.accent, fontWeight: 800, marginBottom: 8, textTransform: "uppercase" }}>Internal Peer-Review</div>
+                      <div style={{ fontWeight: 800, color: T.text1, marginBottom: 6 }}>{p.title}</div>
+                      <div style={{ fontSize: "0.7rem", color: T.text3, marginBottom: 15 }}>{p.authors || "APEX AI Collective"} | {p.date || "Q4 2024"}</div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button style={{ flex: 1, padding: "6px", background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 6, color: T.text2, fontSize: "0.65rem" }}>📄 View Abstract</button>
+                        <button style={{ flex: 1, padding: "6px", background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 6, color: T.text2, fontSize: "0.65rem" }}>📥 Export PDF</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* COLLABORATION */}
+        {tab === "collab" && (
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
+            <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+              <h3 style={{ margin: "0 0 20px 0" }}>Lab Collaboration</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
+                {[
+                  { user: "Sarah Kim", action: "pushed complexity audit for DNA-v2", time: "10m ago", icon: "⚙️" },
+                  { user: "Dr. Mei Lin", action: "approved synthesis hypothesis", time: "1h ago", icon: "🔬" },
+                  { user: "Alex Chen", action: "requested patent review for 'Bio-Logic Gates'", time: "4h ago", icon: "💻" }
+                ].map((act, i) => (
+                  <div key={i} style={{ display: "flex", gap: 15, paddingBottom: 15, borderBottom: `1px solid ${T.border2}` }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: T.surf2, display: "flex", alignItems: "center", justifyContent: "center" }}>{act.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "0.8rem", color: T.text1 }}><span style={{ fontWeight: 700 }}>{act.user}</span> {act.action}</div>
+                      <div style={{ fontSize: "0.65rem", color: T.text3 }}>{act.time}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+              <h4 style={{ margin: "0 0 16px 0", fontSize: "0.9rem" }}>Active Sessions</h4>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {Object.values(EMPS).slice(0, 8).map(e => (
+                  <div key={e.id} title={e.name} style={{ width: 36, height: 36, borderRadius: "50%", background: `${e.color}20`, border: `2px solid ${e.color}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{e.icon}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* EXPERIMENTS */}
+        {tab === "experiments" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+              <h3 style={{ margin: "0 0 20px 0" }}>Experiment Manager</h3>
+              <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+                <input value={labInp} onChange={e=>setLabInp(e.target.value)} placeholder="New experiment hypothesis or dataset URL..." style={{ flex: 1, background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 8, padding: "10px 15px", color: T.text1, fontSize: "0.85rem" }} />
+                <button onClick={()=>runResearchAction("Run Experiment Simulation", "experiments")} style={{ padding: "10px 20px", background: T.accent, border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, cursor: "pointer" }}>Run</button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {S.lab.experiments.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "40px 0", color: T.text3 }}>No experiment history recorded.</div>
+                ) : (
+                  S.lab.experiments.map(ex => (
+                    <div key={ex.id} style={{ padding: 15, background: T.surf2, borderRadius: 12, border: `1px solid ${T.border2}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <span style={{ fontWeight: 700, fontSize: "0.85rem" }}>{ex.hypothesis || "Hypothesis"}</span>
+                        <span style={{ fontSize: "0.65rem", background: T.accent, color: "#fff", padding: "2px 6px", borderRadius: 4 }}>{ex.accuracy || "98.2%"}</span>
+                      </div>
+                      <div style={{ fontSize: "0.75rem", color: T.text2, lineHeight: 1.4 }}>{ex.results || "Experiment concluded with significant results."}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+                <h4 style={{ margin: "0 0 16px 0", color: T.text1 }}>Reproducibility Tracking</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {["Env-Config: V100x8", "Random Seed: 0x42", "Data Hash: SHA-256...f3"].map(t => (
+                    <div key={t} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: "0.75rem", color: T.text2 }}>
+                      <span style={{ color: T.green }}>✓</span> {t}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* KNOWLEDGE BASE */}
+        {tab === "knowledge" && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 20 }}>
+            <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+              <div style={{ fontSize: 32, marginBottom: 15 }}>💾</div>
+              <h4 style={{ margin: "0 0 8px 0" }}>Saved Algorithms</h4>
+              <p style={{ fontSize: "0.78rem", color: T.text2, margin: "0 0 15px 0" }}>Review and manage {S.lab.algorithms.length} archived theoretical models.</p>
+              <button onClick={()=>setTab("algorithms")} style={{ width: "100%", padding: 10, background: T.surf2, border: `1px solid ${T.border2}`, borderRadius: 8, color: T.text1, cursor: "pointer" }}>Open Vault</button>
+            </div>
+            <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+              <div style={{ fontSize: 32, marginBottom: 15 }}>📐</div>
+              <h4 style={{ margin: "0 0 8px 0" }}>Saved Formulas</h4>
+              <p style={{ fontSize: "0.78rem", color: T.text2, margin: "0 0 15px 0" }}>Central repository for breakthrough mathematical proofs.</p>
+              <button style={{ width: "100%", padding: 10, background: T.surf2, border: `1px solid ${T.border2}`, borderRadius: 8, color: T.text1, cursor: "pointer" }}>Edit Library</button>
+            </div>
+            <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+              <div style={{ fontSize: 32, marginBottom: 15 }}>🔬</div>
+              <h4 style={{ margin: "0 0 8px 0" }}>References</h4>
+              <p style={{ fontSize: "0.78rem", color: T.text2, margin: "0 0 15px 0" }}>Bibliography and citation manager for external papers.</p>
+              <button style={{ width: "100%", padding: 10, background: T.surf2, border: `1px solid ${T.border2}`, borderRadius: 8, color: T.text1, cursor: "pointer" }}>Scan Index</button>
+            </div>
+          </div>
+        )}
+
+        {/* PATENT CENTER */}
+        {tab === "patent" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20 }}>
+            <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+              <h3 style={{ margin: "0 0 20px 0" }}>Patent Readiness Hub</h3>
+              <div style={{ background: `${T.yellow}08`, border: `1px solid ${T.yellow}20`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
+                <div style={{ fontWeight: 800, color: T.yellow, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>⚠️</span> IP Protection Alert
+                </div>
+                <div style={{ fontSize: "0.8rem", color: T.text2, lineHeight: 1.5 }}>
+                  The current Algorithm (DNA-v2-Optimal) contains novel claims in the compression layer. A priority search is recommended before publication.
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15 }}>
+                <button onClick={()=>runResearchAction("Generate Patent Draft", "patents")} style={{ padding: 15, background: T.bg, border: `1px solid ${T.accent}40`, borderRadius: 12, color: T.text1, fontWeight: 700, cursor: "pointer" }}>✍️ Draft Generator</button>
+                <button onClick={()=>runResearchAction("Novelty Checklist", "patents")} style={{ padding: 15, background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 12, color: T.text1, fontWeight: 700, cursor: "pointer" }}>📜 Novelty Checklist</button>
+                <button onClick={()=>runResearchAction("Prior Art Search", "patents")} style={{ padding: 15, background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 12, color: T.text1, fontWeight: 700, cursor: "pointer" }}>🔍 Prior Art Notes</button>
+                <button onClick={()=>runResearchAction("Claims Editor", "patents")} style={{ padding: 15, background: T.bg, border: `1px solid ${T.border2}`, borderRadius: 12, color: T.text1, fontWeight: 700, cursor: "pointer" }}>⚖️ Claims Editor</button>
+              </div>
+            </div>
+
+            <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
+              <h4 style={{ margin: "0 0 16px 0" }}>Active Claims</h4>
+              {S.lab.patents.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "30px 0", color: T.text3, fontSize: "0.8rem" }}>No active IP filings.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {S.lab.patents.map(pat => (
+                    <div key={pat.id} style={{ padding: 12, background: T.surf2, borderRadius: 10, border: `1px solid ${T.border2}` }}>
+                      <div style={{ fontWeight: 700, fontSize: "0.8rem", color: T.text1 }}>{pat.title || "Invention Claim"}</div>
+                      <div style={{ fontSize: "0.65rem", color: T.yellow }}>Status: {pat.status || "Drafting"}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const ResearchView = ({ S, T, EMPS, isResearcherActive, isResearcherLoading, researcherStreamText, onOpenChat, onSetGoal }) => {
   const [selectedId, setSelectedId] = useState(null);
   const emp = EMPS.researcher;
@@ -2061,6 +2582,7 @@ export default function ApexOS() {
     { id: "planner",   icon: "🗂️", label: "Planner" },
     { id: "build",     icon: "🛠️", label: "Build" },
     { id: "research",  icon: "🔬", label: "Research" },
+    { id: "lab",       icon: "🧬", label: "Research Lab" },
     { id: "reviews",   icon: "🔍", label: "Reviews" },
     { id: "memory",    icon: "🧠", label: "Memory" },
     { id: "analytics", icon: "📈", label: "Analytics" },
@@ -2493,6 +3015,11 @@ export default function ApexOS() {
               researcherStreamText={empStream}
               onOpenChat={() => { setActiveEmp("researcher"); setView("employees"); }}
               onSetGoal={(g) => { setAutoGoal(g); setView("dashboard"); }} />
+          )}
+
+          {/* ═══ RESEARCH LAB ═══ */}
+          {view === "lab" && (
+            <ResearchLabView S={state} T={T} EMPS={EMP_REGISTRY} dispatch={dispatch} addActivity={addActivity} toast={toast} callClaudeJSON={callClaudeJSON} />
           )}
 
           {/* ═══ REVIEWS ═══ */}

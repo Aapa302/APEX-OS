@@ -96,7 +96,7 @@ async function generateContent(messages, system, opts = {}) {
   const urls = [
     `${GEMINI_BASE_URL}/models/${config.geminiModel}:generateContent`,
     `${GEMINI_FALLBACK_URL}/models/${config.geminiModel}:generateContent`,
-    `${GEMINI_BASE_URL}/models/gemini-2.5-flash:generateContent`, // hard fallback
+    `${GEMINI_BASE_URL}/models/gemini-flash-latest:generateContent`, // hard fallback
   ];
 
   const body = {

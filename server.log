@@ -2,9 +2,9 @@
 > apex-gemini-proxy@1.0.0 start
 > node src/server.js
 
-{"ts":"2026-07-11T19:07:52.501Z","level":"info","message":"APEX Gemini Proxy running","data":{"port":8788,"env":"development","provider":"gemini","model":"gemini-2.5-flash","cors":"*","rateLimitPerMin":120}}
-{"ts":"2026-07-11T19:07:52.502Z","level":"info","message":"Proxy endpoint: http://localhost:8788/v1/messages"}
-{"ts":"2026-07-11T19:07:52.502Z","level":"info","message":"Health check:   http://localhost:8788/health"}
-2026-07-11T19:07:55.141Z GET /health 200 3.969 ms
-{"ts":"2026-07-11T19:07:55.202Z","level":"info","message":"Received SIGTERM. Shutting down gracefully…"}
-{"ts":"2026-07-11T19:07:55.202Z","level":"info","message":"Server closed."}
+{"ts":"2026-07-12T08:54:12.039Z","level":"info","message":"APEX Gemini Proxy running","data":{"port":8787,"env":"development","provider":"gemini","model":"gemini-flash-latest","cors":"*","rateLimitPerMin":120}}
+{"ts":"2026-07-12T08:54:12.040Z","level":"info","message":"Proxy endpoint: http://localhost:8787/v1/messages"}
+{"ts":"2026-07-12T08:54:12.040Z","level":"info","message":"Health check:   http://localhost:8787/health"}
+2026-07-12T08:54:16.661Z GET /health 200 4.084 ms
+{"ts":"2026-07-12T08:54:16.701Z","level":"info","message":"Received SIGTERM. Shutting down gracefully…"}
+{"ts":"2026-07-12T08:54:16.702Z","level":"info","message":"Server closed."}
