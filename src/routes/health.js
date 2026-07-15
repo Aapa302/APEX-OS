@@ -13,6 +13,7 @@ router.get("/", (req, res) => {
   res.json({
     status: "ok",
     apiKeySet: !!config.geminiApiKey,
+    ncbiApiKeySet: !!config.ncbiApiKey,
     corsOrigin: config.corsOrigin,
     provider: config.aiProvider,
     model: config.geminiModel,
