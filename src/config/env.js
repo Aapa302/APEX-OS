@@ -26,7 +26,7 @@ const config = {
   corsOrigin: process.env.CORS_ORIGIN || "*",
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),
   rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "120", 10),
-  ncbiApiKey: (process.env.NCBI_API_KEY || "").trim() || null,
+  ncbiApiKey: (process.env.NCBI_API_KEY || "").trim() || (process.env.VITE_NCBI_API_KEY || "").trim() || null,
 };
 
 if (config.aiProvider !== "gemini") {

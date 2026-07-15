@@ -103,11 +103,12 @@ const server = app.listen(config.port, () => {
   logger.info(`Proxy endpoint: http://localhost:${config.port}/v1/messages`);
   logger.info(`Health check:   http://localhost:${config.port}/health`);
 
-  // Warn if NCBI_API_KEY is missing
-  if (!process.env.NCBI_API_KEY) {
-    logger.warn(`⚠️ Warning: NCBI_API_KEY is not set. Routes under /api/ncbi/ will return errors until this key is provided.`);
+  // Warn if NCBI API Key is missing
+  if (!config.ncbiApiKey) {
+    logger.warn(`⚠️ Warning: NCBI API Key is not set. Routes under /api/ncbi/ will return errors until NCBI_API_KEY or VITE_NCBI_API_KEY is provided.`);
   } else {
-    logger.info(`NCBI Biological Data Service active (NCBI_API_KEY is configured)`);
+    const keySource = process.env.NCBI_API_KEY ? "NCBI_API_KEY" : "VITE_NCBI_API_KEY";
+    logger.info(`NCBI Biological Data Service active (${keySource} is configured)`);
   }
 });
 

@@ -24,11 +24,11 @@ class NCBIError extends Error {
  * Throws clean NCBIError if key is missing.
  */
 function getApiKey() {
-  const apiKey = process.env.NCBI_API_KEY;
-  if (!apiKey || !apiKey.trim()) {
-    throw new NCBIError("NCBI API Key is missing. Please configure NCBI_API_KEY in the environment.", 401);
+  const apiKey = (process.env.NCBI_API_KEY || "").trim() || (process.env.VITE_NCBI_API_KEY || "").trim();
+  if (!apiKey) {
+    throw new NCBIError("NCBI API Key is missing. Please configure NCBI_API_KEY or VITE_NCBI_API_KEY in the environment.", 401);
   }
-  return apiKey.trim();
+  return apiKey;
 }
 
 /**

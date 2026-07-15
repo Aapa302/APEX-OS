@@ -66,6 +66,39 @@ async function runTests() {
     assert.strictEqual(err.details.reason, "rate_limit");
     console.log("✅ Passed: GeminiError validation\n");
 
+    // 3.5 Test NCBI API Key fallback logic
+    console.log("Testing: NCBI API Key fallback logic...");
+    const originalNCBIKey = process.env.NCBI_API_KEY;
+    const originalViteKey = process.env.VITE_NCBI_API_KEY;
+
+    try {
+      // Scenario A: Both set -> should pick NCBI_API_KEY
+      process.env.NCBI_API_KEY = "primary_key";
+      process.env.VITE_NCBI_API_KEY = "fallback_key";
+      delete require.cache[require.resolve("../src/config/env")];
+      let config = require("../src/config/env");
+      assert.strictEqual(config.ncbiApiKey, "primary_key");
+
+      // Scenario B: Only VITE_NCBI_API_KEY set -> should pick VITE_NCBI_API_KEY
+      delete process.env.NCBI_API_KEY;
+      process.env.VITE_NCBI_API_KEY = "fallback_key";
+      delete require.cache[require.resolve("../src/config/env")];
+      config = require("../src/config/env");
+      assert.strictEqual(config.ncbiApiKey, "fallback_key");
+
+      // Scenario C: Neither set -> should be null
+      delete process.env.NCBI_API_KEY;
+      delete process.env.VITE_NCBI_API_KEY;
+      delete require.cache[require.resolve("../src/config/env")];
+      config = require("../src/config/env");
+      assert.strictEqual(config.ncbiApiKey, null);
+    } finally {
+      process.env.NCBI_API_KEY = originalNCBIKey;
+      process.env.VITE_NCBI_API_KEY = originalViteKey;
+      delete require.cache[require.resolve("../src/config/env")];
+    }
+    console.log("✅ Passed: NCBI API Key fallback logic\n");
+
     // 4. Test NCBI Service directly
     console.log("Testing: NCBI Service methods directly...");
     const ncbiService = require("../src/services/NCBIService");
