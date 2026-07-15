@@ -52,7 +52,7 @@ function toGeminiContents(messages) {
  * Wraps Gemini's response text in the exact shape the APEX OS
  * frontend expects from Claude: { content: [{ type: "text", text }] }
  */
-function toAnthropicResponse(geminiData) {
+function toAnthropicResponse(geminiData, actualModel) {
   const candidate = geminiData?.candidates?.[0];
   const parts = candidate?.content?.parts || [];
   const text = parts.map((p) => p.text || "").join("");
@@ -67,7 +67,7 @@ function toAnthropicResponse(geminiData) {
 
   return {
     content: [{ type: "text", text }],
-    model: config.geminiModel,
+    model: actualModel || config.geminiModel,
     provider: "gemini",
   };
 }
@@ -82,105 +82,126 @@ class GeminiError extends Error {
 }
 
 /**
- * Calls Gemini's generateContent endpoint with retry logic for 429 errors.
+ * Calls Gemini's generateContent endpoint with retry logic and robust model fallbacks.
  *
  * @param {Array} messages - Anthropic-shaped messages array
  * @param {string} system - system prompt text
- * @param {object} opts - { jsonMode: boolean, maxTokens: number }
+ * @param {object} opts - { jsonMode: boolean, maxTokens: number, temperature: number, top_p: number }
  * @returns {Promise<object>} Anthropic-shaped response: { content: [{type:"text", text}] }
  */
 async function generateContent(messages, system, opts = {}) {
   const { jsonMode = false, maxTokens = 1000 } = opts;
 
-  // Try v1beta first, then v1 if it 404s
-  const urls = [
-    `${GEMINI_BASE_URL}/models/${config.geminiModel}:generateContent`,
-    `${GEMINI_FALLBACK_URL}/models/${config.geminiModel}:generateContent`,
-    `${GEMINI_BASE_URL}/models/gemini-flash-latest:generateContent`, // hard fallback
+  // Prioritized list of models to try.
+  // 1. Requested model from parameter (defaults to configured model)
+  // 2. Configured model
+  // 3. Known stable/high-availability fallbacks
+  const preferredModel = opts.model || config.geminiModel || "gemini-flash-latest";
+  const fallbackModels = [
+    preferredModel,
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-flash-latest",
+    "gemini-1.5-flash"
   ];
 
-  const body = {
-    contents: toGeminiContents(messages),
-    generationConfig: {
-      maxOutputTokens: maxTokens,
-      temperature: opts.temperature ?? 0.7,
-      topP: opts.top_p ?? 0.95,
-    },
-  };
+  // Remove duplicates while preserving prioritized order
+  const uniqueModels = Array.from(new Set(fallbackModels));
 
-  if (system && system.trim()) {
-    body.systemInstruction = { parts: [{ text: system }] };
-  }
-
-  if (jsonMode) {
-    body.generationConfig.response_mime_type = "application/json";
-  }
-
-  const maxRetries = 3;
-  let retryCount = 0;
   let lastError = null;
 
-  for (const url of urls) {
-    retryCount = 0;
-    const cleanUrl = url.split("?")[0];
-    console.info(`[GeminiService] Attempting: ${cleanUrl}`);
+  for (const model of uniqueModels) {
+    // Try both v1beta and v1 endpoints for this model
+    const urls = [
+      `${GEMINI_BASE_URL}/models/${model}:generateContent`,
+      `${GEMINI_FALLBACK_URL}/models/${model}:generateContent`
+    ];
 
-    while (retryCount <= maxRetries) {
-      let res;
-      try {
-        // Use query parameter for API key as it's more universally supported across Gemini endpoints
-        const authenticatedUrl = `${url}${url.includes('?') ? '&' : '?'}key=${config.geminiApiKey}`;
-        res = await fetch(authenticatedUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        });
-      } catch (networkErr) {
-        console.error(`[GeminiService] Fetch failed for ${cleanUrl}:`, networkErr.message);
-        lastError = new GeminiError(`Network error calling Gemini: ${networkErr.message}`, 502);
-        break; // try next URL
+    const body = {
+      contents: toGeminiContents(messages),
+      generationConfig: {
+        maxOutputTokens: maxTokens,
+        temperature: opts.temperature ?? 0.7,
+        topP: opts.top_p ?? 0.95,
+        ...(jsonMode ? { response_mime_type: "application/json" } : {})
       }
+    };
 
-      let data;
-      const rawText = await res.text();
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        lastError = new GeminiError(`Gemini returned non-JSON response (status ${res.status})`, 502, rawText.slice(0, 500));
-        break; // try next URL
-      }
+    if (system && system.trim()) {
+      body.systemInstruction = { parts: [{ text: system }] };
+    }
 
-      if (!res.ok) {
-        console.warn(`[GeminiService] ${cleanUrl} returned ${res.status}:`, data?.error?.message);
+    for (const url of urls) {
+      const cleanUrl = url.split("?")[0];
+      console.info(`[GeminiService] Attempting model [${model}] at endpoint: ${cleanUrl}`);
 
-        if (res.status === 404) {
-          lastError = new GeminiError(data?.error?.message || "Model not found", 404);
-          break; // try next URL (v1 or fallback model)
+      let retryCount = 0;
+      // Keep max retries extremely low (1) per endpoint so that we quickly fall back
+      // to another model rather than stalling for 60 seconds.
+      const maxRetries = 1;
+
+      while (retryCount <= maxRetries) {
+        let res;
+        try {
+          const authenticatedUrl = `${url}${url.includes('?') ? '&' : '?'}key=${config.geminiApiKey}`;
+          res = await fetch(authenticatedUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+          });
+        } catch (networkErr) {
+          console.error(`[GeminiService] Fetch failed for ${cleanUrl}:`, networkErr.message);
+          lastError = new GeminiError(`Network error calling Gemini: ${networkErr.message}`, 502);
+          break; // try next endpoint/model
         }
 
-        if (res.status === 429) {
-          if (data?.error?.message?.includes("quota") || data?.error?.message?.includes("limit: 0")) {
-            lastError = new GeminiError(`Gemini Quota Exceeded (Limit 0). This API key might not have access to ${config.geminiModel} or the free tier is exhausted. Error: ${data.error.message}`, 429, data.error);
-            break; // Quota error is usually permanent for the window, try next URL/model
-          }
-
-          if (retryCount < maxRetries) {
-            retryCount++;
-            const delay = Math.pow(2, retryCount) * 1000;
-            console.warn(`[GeminiService] 429 hit at ${url}. Retry ${retryCount}/${maxRetries} in ${delay}ms...`);
-            await new Promise((resolve) => setTimeout(resolve, delay));
-            continue;
-          }
+        let data;
+        const rawText = await res.text();
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          lastError = new GeminiError(`Gemini returned non-JSON response (status ${res.status})`, 502, rawText.slice(0, 500));
+          break; // try next endpoint/model
         }
 
-        const apiMessage = data?.error?.message || `Gemini API error (status ${res.status})`;
-        lastError = new GeminiError(apiMessage, res.status, data?.error || null);
-        break; // try next URL
-      }
+        if (!res.ok) {
+          console.warn(`[GeminiService] Model [${model}] failed on ${cleanUrl} with status ${res.status}:`, data?.error?.message);
 
-      return toAnthropicResponse(data);
+          if (res.status === 404) {
+            lastError = new GeminiError(data?.error?.message || "Model not found", 404);
+            break; // try next endpoint/model
+          }
+
+          if (res.status === 429) {
+            if (data?.error?.message?.includes("quota") || data?.error?.message?.includes("limit: 0")) {
+              lastError = new GeminiError(`Gemini Quota Exceeded. Error: ${data.error.message}`, 429, data.error);
+              break; // try next endpoint/model
+            }
+
+            if (retryCount < maxRetries) {
+              retryCount++;
+              const delay = 1000;
+              console.warn(`[GeminiService] 429 hit at ${cleanUrl}. Retry ${retryCount}/${maxRetries} in ${delay}ms...`);
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              continue;
+            }
+          }
+
+          if (res.status === 503 || res.status === 502 || res.status === 504) {
+            lastError = new GeminiError(`Gemini Service Unavailable: ${data?.error?.message || "Service error"}`, res.status, data?.error || null);
+            break; // Immediately try the next endpoint/model instead of waiting!
+          }
+
+          const apiMessage = data?.error?.message || `Gemini API error (status ${res.status})`;
+          lastError = new GeminiError(apiMessage, res.status, data?.error || null);
+          break; // try next endpoint/model
+        }
+
+        console.info(`[GeminiService] Success with model [${model}]`);
+        return toAnthropicResponse(data, model);
+      }
     }
   }
 
