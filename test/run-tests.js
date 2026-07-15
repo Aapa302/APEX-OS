@@ -58,6 +58,49 @@ async function runTests() {
     assert.strictEqual(anthropicResponse.content[0].text, "This is a response from Gemini.");
     console.log("✅ Passed: Gemini -> Anthropic response translation\n");
 
+    // 2.5. Test generateContent with system prompt (verifying no systemInstruction payload and proper prepending)
+    console.log("Testing: generateContent system prompt handling...");
+    const originalFetch = global.fetch;
+    let lastRequestBody = null;
+    let lastRequestUrl = null;
+
+    global.fetch = async (url, options) => {
+      lastRequestUrl = url;
+      lastRequestBody = JSON.parse(options.body);
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          candidates: [{
+            content: {
+              parts: [{ text: "Mock response" }]
+            },
+            finishReason: "STOP"
+          }]
+        })
+      };
+    };
+
+    try {
+      const { generateContent } = require("../src/services/geminiService");
+      const messages = [{ role: "user", content: "Hello CEO" }];
+      const system = "You are the CEO of APEX.";
+
+      const result = await generateContent(messages, system, { maxTokens: 100 });
+
+      assert.strictEqual(result.content[0].text, "Mock response");
+      assert.ok(lastRequestBody !== null, "Request body should not be null");
+      assert.strictEqual(lastRequestBody.systemInstruction, undefined, "systemInstruction should not be in request payload");
+
+      const firstMessage = lastRequestBody.contents[0];
+      assert.strictEqual(firstMessage.role, "user");
+      assert.strictEqual(firstMessage.parts[0].text, "You are the CEO of APEX.\n\nHello CEO");
+
+      console.log("✅ Passed: generateContent system prompt prepended successfully without systemInstruction field\n");
+    } finally {
+      global.fetch = originalFetch;
+    }
+
     // 3. Test GeminiError details
     console.log("Testing: GeminiError status and details...");
     const { GeminiError } = require("../src/services/geminiService");

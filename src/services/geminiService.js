@@ -117,8 +117,26 @@ async function generateContent(messages, system, opts = {}) {
       `${GEMINI_FALLBACK_URL}/models/${model}:generateContent`
     ];
 
+    const geminiContents = toGeminiContents(messages);
+
+    if (system && system.trim()) {
+      if (geminiContents.length > 0 && geminiContents[0].role === "user") {
+        const firstPart = geminiContents[0].parts[0];
+        if (firstPart && typeof firstPart.text === "string") {
+          firstPart.text = `${system}\n\n${firstPart.text}`;
+        } else {
+          geminiContents[0].parts.unshift({ text: system });
+        }
+      } else {
+        geminiContents.unshift({
+          role: "user",
+          parts: [{ text: system }]
+        });
+      }
+    }
+
     const body = {
-      contents: toGeminiContents(messages),
+      contents: geminiContents,
       generationConfig: {
         maxOutputTokens: maxTokens,
         temperature: opts.temperature ?? 0.7,
@@ -126,10 +144,6 @@ async function generateContent(messages, system, opts = {}) {
         ...(jsonMode ? { response_mime_type: "application/json" } : {})
       }
     };
-
-    if (system && system.trim()) {
-      body.systemInstruction = { parts: [{ text: system }] };
-    }
 
     for (const url of urls) {
       const cleanUrl = url.split("?")[0];
