@@ -121,8 +121,17 @@ async function generateContent(messages, system, opts = {}) {
       const cleanUrl = url.split("?")[0];
       console.info(`[GeminiService] Attempting model [${model}] at endpoint: ${cleanUrl}`);
 
+      const geminiContents = toGeminiContents(messages);
+      if (system && system.trim()) {
+        if (geminiContents.length > 0 && geminiContents[0].role === "user") {
+          geminiContents[0].parts.unshift({ text: `System Instruction / System Prompt:\n${system}\n\n` });
+        } else {
+          geminiContents.unshift({ role: "user", parts: [{ text: `System Instruction / System Prompt:\n${system}` }] });
+        }
+      }
+
       const body = {
-        contents: toGeminiContents(messages),
+        contents: geminiContents,
         generationConfig: {
           maxOutputTokens: maxTokens,
           temperature: opts.temperature ?? 0.7,
@@ -130,17 +139,6 @@ async function generateContent(messages, system, opts = {}) {
           ...(jsonMode && !url.includes("/v1/") ? { response_mime_type: "application/json" } : {})
         }
       };
-
-      if (system && system.trim()) {
-        if (url.includes("/v1beta/")) {
-          body.systemInstruction = { parts: [{ text: system }] };
-        } else {
-          body.contents = [
-            { role: "user", parts: [{ text: `System Instruction: ${system}` }] },
-            ...body.contents
-          ];
-        }
-      }
 
       let retryCount = 0;
       // Keep max retries extremely low (1) per endpoint so that we quickly fall back
