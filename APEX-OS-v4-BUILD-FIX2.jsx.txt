@@ -2547,7 +2547,11 @@ Provide a single JSON object matching this schema:
   "description": "Standard biological name / description",
   "summary": "Detailed official NCBI genomic summary of the gene"
 }`;
-            const fbData = await callClaudeJSON([{ role: "user", content: `Fetch profile for ${query}` }], sys, 1500);
+            const rawReply = await callClaude([{ role: "user", content: `Fetch profile for ${query}` }], sys);
+            const clean = rawReply.replace(/```json\s*/gi,"").replace(/```\s*/g,"").trim();
+            const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+            if (s === -1) throw new Error("No JSON found");
+            const fbData = JSON.parse(clean.slice(s, e + 1));
             results = [fbData];
           }
 
