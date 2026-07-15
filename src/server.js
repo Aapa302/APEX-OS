@@ -26,6 +26,7 @@ const { errorHandler, notFoundHandler } = require("./middleware/errorHandler");
 const messagesRouter = require("./routes/messages");
 const healthRouter = require("./routes/health");
 const exportRouter = require("./routes/export");
+const ncbiRouter = require("./routes/ncbi");
 
 const app = express();
 
@@ -81,6 +82,7 @@ app.use("/v1", limiter);
 app.use("/health", healthRouter);
 app.use("/v1/messages", messagesRouter);
 app.use("/v1/export", exportRouter);
+app.use("/api/ncbi", ncbiRouter);
 
 // ── 404 ──────────────────────────────────────────────────────
 app.use(notFoundHandler);
@@ -100,6 +102,13 @@ const server = app.listen(config.port, () => {
   });
   logger.info(`Proxy endpoint: http://localhost:${config.port}/v1/messages`);
   logger.info(`Health check:   http://localhost:${config.port}/health`);
+
+  // Warn if NCBI_API_KEY is missing
+  if (!process.env.NCBI_API_KEY) {
+    logger.warn(`⚠️ Warning: NCBI_API_KEY is not set. Routes under /api/ncbi/ will return errors until this key is provided.`);
+  } else {
+    logger.info(`NCBI Biological Data Service active (NCBI_API_KEY is configured)`);
+  }
 });
 
 // ── Graceful shutdown ─────────────────────────────────────────
