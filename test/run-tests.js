@@ -9,8 +9,11 @@ const assert = require("assert");
 // MUST be set before requiring geminiService
 process.env.GEMINI_API_KEY = "dummy_key";
 process.env.AI_PROVIDER = "gemini";
+process.env.NCBI_API_KEY = "dummy_key";
 
 const { toGeminiContents, toAnthropicResponse } = require("../src/services/geminiService");
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function runTests() {
   console.log("🚀 Running APEX Gemini Proxy tests...\n");
@@ -62,6 +65,67 @@ async function runTests() {
     assert.strictEqual(err.status, 429);
     assert.strictEqual(err.details.reason, "rate_limit");
     console.log("✅ Passed: GeminiError validation\n");
+
+    // 4. Test NCBI Service directly
+    console.log("Testing: NCBI Service methods directly...");
+    const ncbiService = require("../src/services/NCBIService");
+
+    console.log("  - searchGene('BRCA1')");
+    const searchRes = await ncbiService.searchGene("BRCA1");
+    assert.ok(searchRes.count > 0, "Gene search count should be > 0");
+    assert.ok(searchRes.ids.length > 0, "Gene search ids should not be empty");
+    assert.ok(searchRes.results.length > 0, "Gene search results should not be empty");
+
+    await sleep(1500);
+
+    console.log("  - fetchFasta('NM_007294.4')");
+    const fastaRes = await ncbiService.fetchFasta("NM_007294.4");
+    assert.strictEqual(fastaRes.accessionId, "NM_007294.4");
+    assert.ok(fastaRes.fasta.includes(">NM_007294.4"), "FASTA content should include header");
+
+    await sleep(1500);
+
+    console.log("  - fetchMetadata('NM_007294.4')");
+    const metaRes = await ncbiService.fetchMetadata("NM_007294.4");
+    assert.strictEqual(metaRes.accessionId, "NM_007294.4");
+    assert.ok(metaRes.metadata.title.includes("BRCA1"), "Metadata title should include BRCA1");
+
+    console.log("✅ Passed: NCBI Service direct methods\n");
+
+    // 5. Test NCBI Express Routes
+    console.log("Testing: NCBI Express Routes integration...");
+    // Require the server (this starts the Express app on config.port, e.g. 8787)
+    require("../src/server");
+    const PORT = process.env.PORT || 8787;
+    const BASE_ROUTE_URL = `http://localhost:${PORT}/api/ncbi`;
+
+    await sleep(1500);
+
+    console.log(`  - POST /api/ncbi/search-gene`);
+    const routeSearchRes = await fetch(`${BASE_ROUTE_URL}/search-gene`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "BRCA1" })
+    });
+    assert.strictEqual(routeSearchRes.status, 200, "Search gene route should return 200");
+    const routeSearchData = await routeSearchRes.json();
+    assert.ok(routeSearchData.count > 0, "Route search count should be > 0");
+    assert.ok(routeSearchData.ids.length > 0, "Route search ids should not be empty");
+
+    await sleep(1500);
+
+    console.log(`  - POST /api/ncbi/fetch-fasta`);
+    const routeFastaRes = await fetch(`${BASE_ROUTE_URL}/fetch-fasta`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accessionId: "NM_007294.4" })
+    });
+    assert.strictEqual(routeFastaRes.status, 200, "Fetch FASTA route should return 200");
+    const routeFastaData = await routeFastaRes.json();
+    assert.strictEqual(routeFastaData.accessionId, "NM_007294.4");
+    assert.ok(routeFastaData.fasta.includes(">NM_007294.4"), "Route FASTA content should include header");
+
+    console.log("✅ Passed: NCBI Express Routes integration\n");
 
     console.log("🎉 All tests passed!");
     process.exit(0);
