@@ -2,9 +2,9 @@
 > apex-gemini-proxy@1.0.0 start
 > node src/server.js
 
-{"ts":"2026-07-15T17:56:31.157Z","level":"info","message":"APEX Gemini Proxy running","data":{"port":8787,"env":"development","provider":"gemini","model":"gemini-flash-latest","cors":"*","rateLimitPerMin":300}}
-{"ts":"2026-07-15T17:56:31.158Z","level":"info","message":"Proxy endpoint: http://localhost:8787/v1/messages"}
-{"ts":"2026-07-15T17:56:31.158Z","level":"info","message":"Health check:   http://localhost:8787/health"}
-{"ts":"2026-07-15T17:56:31.158Z","level":"info","message":"NCBI Biological Data Service active (NCBI_API_KEY is configured)"}
-{"ts":"2026-07-15T17:56:54.301Z","level":"info","message":"Received SIGTERM. Shutting down gracefully…"}
-{"ts":"2026-07-15T17:56:54.302Z","level":"info","message":"Server closed."}
+{"ts":"2026-07-15T19:47:37.990Z","level":"info","message":"APEX Gemini Proxy running","data":{"port":8787,"env":"development","provider":"gemini","model":"gemini-flash-latest","cors":"*","rateLimitPerMin":300}}
+{"ts":"2026-07-15T19:47:37.991Z","level":"info","message":"Proxy endpoint: http://localhost:8787/v1/messages"}
+{"ts":"2026-07-15T19:47:37.992Z","level":"info","message":"Health check:   http://localhost:8787/health"}
+{"ts":"2026-07-15T19:47:37.992Z","level":"warn","message":"⚠️ Warning: NCBI API Key is not set. Routes under /api/ncbi/ will return errors until NCBI_API_KEY or VITE_NCBI_API_KEY is provided."}
+{"ts":"2026-07-15T19:47:53.400Z","level":"info","message":"Received SIGTERM. Shutting down gracefully…"}
+{"ts":"2026-07-15T19:47:53.401Z","level":"info","message":"Server closed."}
