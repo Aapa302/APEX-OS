@@ -68,6 +68,17 @@ router.post("/search-protein", async (req, res) => {
   }
 });
 
+// POST /api/ncbi/search-pubmed
+router.post("/search-pubmed", async (req, res) => {
+  try {
+    const { query } = req.body;
+    const result = await ncbiService.searchPubmed(query);
+    return res.json(result);
+  } catch (err) {
+    return handleRouteError(err, res);
+  }
+});
+
 // POST /api/ncbi/fetch-fasta
 router.post("/fetch-fasta", async (req, res) => {
   try {

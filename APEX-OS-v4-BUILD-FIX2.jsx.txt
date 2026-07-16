@@ -2933,6 +2933,248 @@ APEX OS has loaded the **DNA Lab** synthesizer.
     setCeoLoading(false);
   }, [ceoInput, ceoLoading, attachedFile, state.ceoChats, state.memory, state.company, state.lab, processCEOCommands, addActivity, toast, callClaudeJSON]);
 
+  // ── Real Research Workflow for Research Engineer ──
+  const runRealResearch = useCallback(async (query, onProgressStream) => {
+    addActivity(`Dr. Mei Lin initiated research: "${query}"`, "🔬");
+    if (onProgressStream) {
+      onProgressStream(`🔬 **RESEARCH IN PROGRESS** for query: "${query}"\n\n`);
+    }
+
+    let geneResults = null;
+    let nucleotideResults = null;
+    let proteinResults = null;
+    let fastaData = null;
+    let metadataData = null;
+    let pubmedResults = null;
+
+    try {
+      if (onProgressStream) onProgressStream(prev => prev + `📡 Querying NCBI databases...\n`);
+
+      const searchTerms = query.replace(/(?:search|find|papers|publications|research)\s+/i, "").trim();
+
+      try {
+        const geneRes = await fetch(`${PROXY_BASE_URL}/api/ncbi/search-gene`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: searchTerms })
+        });
+        if (geneRes.ok) {
+          geneResults = await geneRes.json();
+        }
+      } catch (err) {
+        console.error("NCBI Gene search failed", err);
+      }
+
+      try {
+        const nucRes = await fetch(`${PROXY_BASE_URL}/api/ncbi/search-nucleotide`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: searchTerms })
+        });
+        if (nucRes.ok) {
+          nucleotideResults = await nucRes.json();
+        }
+      } catch (err) {
+        console.error("NCBI Nucleotide search failed", err);
+      }
+
+      try {
+        const protRes = await fetch(`${PROXY_BASE_URL}/api/ncbi/search-protein`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: searchTerms })
+        });
+        if (protRes.ok) {
+          proteinResults = await protRes.json();
+        }
+      } catch (err) {
+        console.error("NCBI Protein search failed", err);
+      }
+
+      let accessionToFetch = null;
+      if (nucleotideResults && nucleotideResults.ids && nucleotideResults.ids.length > 0) {
+        accessionToFetch = nucleotideResults.ids[0];
+      } else if (proteinResults && proteinResults.ids && proteinResults.ids.length > 0) {
+        accessionToFetch = proteinResults.ids[0];
+      } else if (geneResults && geneResults.ids && geneResults.ids.length > 0) {
+        accessionToFetch = geneResults.ids[0];
+      }
+
+      if (accessionToFetch) {
+        if (onProgressStream) onProgressStream(prev => prev + `🧬 Downloading real-world FASTA sequence & biological coordinates...\n`);
+        try {
+          const fastaRes = await fetch(`${PROXY_BASE_URL}/api/ncbi/fetch-fasta`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accessionId: String(accessionToFetch) })
+          });
+          if (fastaRes.ok) {
+            fastaData = await fastaRes.json();
+          }
+        } catch (err) {
+          console.error("NCBI fetch FASTA failed", err);
+        }
+
+        try {
+          const metaRes = await fetch(`${PROXY_BASE_URL}/api/ncbi/fetch-metadata`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accessionId: String(accessionToFetch) })
+          });
+          if (metaRes.ok) {
+            metadataData = await metaRes.json();
+          }
+        } catch (err) {
+          console.error("NCBI fetch metadata failed", err);
+        }
+      }
+
+      if (onProgressStream) onProgressStream(prev => prev + `📚 Scanning PubMed database for scientific literature...\n`);
+      try {
+        const pmRes = await fetch(`${PROXY_BASE_URL}/api/ncbi/search-pubmed`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: searchTerms })
+        });
+        if (pmRes.ok) {
+          pubmedResults = await pmRes.json();
+        }
+      } catch (err) {
+        console.error("PubMed search failed", err);
+      }
+
+      const hasNCBIData = (geneResults && geneResults.count > 0) ||
+                          (nucleotideResults && nucleotideResults.count > 0) ||
+                          (proteinResults && proteinResults.count > 0);
+      const hasPubMedData = pubmedResults && pubmedResults.count > 0;
+
+      if (!hasNCBIData || !hasPubMedData) {
+        const ncbiStatus = hasNCBIData ? "Success" : "Failed / 0 records found";
+        const pubmedStatus = hasPubMedData ? "Success" : "Failed / 0 papers found";
+
+        const failureReport = `⚠️ **RESEARCH OPERATION FAILED**
+
+One or more required scientific repositories returned no results for query \`"${searchTerms}"\`.
+
+- **NCBI Status**: ${ncbiStatus}
+- **PubMed Status**: ${pubmedStatus}
+
+**Error Directive**: As a rigorous Research Engineer, I do not generate fake research or invent biological data. This operation is suspended until valid database coordinates or search terms are supplied.`;
+
+        if (onProgressStream) onProgressStream(failureReport);
+        addActivity(`Research failed: Missing repository data for "${searchTerms}"`, "⚠️");
+        return failureReport;
+      }
+
+      if (onProgressStream) onProgressStream(prev => prev + `✍️ Synthesizing formal research report with evidence-based annotations...\n`);
+
+      const rawPayload = {
+        query: searchTerms,
+        ncbiGene: geneResults ? { count: geneResults.count, ids: geneResults.ids, results: (geneResults.results || []).slice(0, 3) } : null,
+        ncbiNucleotide: nucleotideResults ? { count: nucleotideResults.count, ids: nucleotideResults.ids } : null,
+        ncbiProtein: proteinResults ? { count: proteinResults.count, ids: proteinResults.ids } : null,
+        fasta: fastaData ? fastaData.fasta : null,
+        metadata: metadataData ? metadataData.metadata : null,
+        pubmed: pubmedResults ? { count: pubmedResults.count, ids: pubmedResults.ids, results: (pubmedResults.results || []).slice(0, 5) } : null
+      };
+
+      const systemPrompt = `You are Dr. Mei Lin, Research Engineer at the company. PhD in Computer Science, former DeepMind research scientist and McKinsey consultant.
+You produce rigorous, evidence-based research that the company can actually act on.
+You MUST write a professional research report strictly using the provided REAL-WORLD biological and scientific database results from NCBI and PubMed.
+The employee must NEVER generate fake research or invent biological data. Any facts, sequences, accession IDs, or article IDs in the report must be strictly derived from the provided results.
+
+Structure every research output as a formal report with these exact sections in order:
+# Executive Summary
+(2-3 sentences summarizing the findings)
+
+# Key Findings
+(3-6 specific falsifiable bullets based strictly on the retrieved raw data)
+
+# Risks
+(Potential risks or scientific challenges indicated in the data or general knowledge around this topic)
+
+# Opportunities
+(Future applications or opportunities for the company)
+
+# Recommendations
+(Specific next actions with an owner, e.g. sarah, Priya, etc.)
+
+# Sources
+(Be honest about evidence quality, referencing the NCBI/PubMed UIDs, article titles, or FASTA IDs retrieved)
+
+# Confidence Score
+(0-100 with justification)
+
+# Research Memory
+- **Search Query**: (The exact search term used)
+- **Time**: (The current UTC or ISO time)
+- **NCBI IDs**: (List the real NCBI UIDs found in the results)
+- **FASTA Sequences**: (Include the real FASTA sequence or a snippet of it)
+- **Paper IDs**: (List the PMIDs of PubMed papers found)
+- **Abstract summaries**: (Summarize the abstracts or titles of PubMed publications)
+- **References**: (Provide official citations or titles of publications)
+
+Always end with "🔬 RESEARCH DIRECTIVE:".`;
+
+      const userPrompt = `Build the structured research report for: "${query}".
+Here is the real biological and literature data retrieved from the official NCBI and PubMed APIs:
+\`\`\`json
+${JSON.stringify(rawPayload, null, 2)}
+\`\`\`
+Compile this data and produce a comprehensive, professional report.`;
+
+      const reportText = await callClaude(
+        [{ role: "user", content: userPrompt }],
+        systemPrompt
+      );
+
+      const reportParsed = parseResearchReport(reportText);
+
+      const researchEntry = {
+        id: `res_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+        query: searchTerms,
+        ...reportParsed,
+        createdAt: new Date().toISOString(),
+        searchQuery: searchTerms,
+        time: new Date().toISOString(),
+        ncbiIds: (geneResults?.ids || []).concat(nucleotideResults?.ids || []).concat(proteinResults?.ids || []),
+        fastaSequences: fastaData ? [fastaData.fasta] : [],
+        paperIds: pubmedResults?.ids || [],
+        abstractSummaries: (pubmedResults?.results || []).map(p => p.title || p.uid),
+        references: (pubmedResults?.results || []).map(p => `${p.authors?.map(a => a.name).join(", ") || "Unknown Author"} (${p.pubdate || "n.d."}). ${p.title || "No Title"}. ${p.source || "PubMed"}.`)
+      };
+
+      dispatch({ type: "ADD_RESEARCH", payload: researchEntry });
+
+      MemoryEngine.store(dispatch, {
+        category: "insight",
+        content: `Research: "${searchTerms.slice(0,80)}" — ${reportParsed.executiveSummary.slice(0,160)}`,
+        importance: reportParsed.confidenceScore >= 70 ? "high" : "medium",
+      });
+
+      addActivity(`🔬 Research report completed: "${searchTerms.slice(0,50)}" (confidence: ${reportParsed.confidenceScore ?? "n/a"})`, "🔬");
+
+      if (onProgressStream) {
+        let i = 0;
+        await new Promise(resolve => {
+          const iv = setInterval(() => {
+            i = Math.min(i + Math.ceil(reportText.length / 50), reportText.length);
+            onProgressStream(reportText.slice(0, i));
+            if (i >= reportText.length) { clearInterval(iv); resolve(); }
+          }, 16);
+        });
+      }
+
+      return reportText;
+
+    } catch (e) {
+      console.error("Research workflow error:", e);
+      const errorMsg = `⚠️ **Research Engine Error**: ${e.message}`;
+      if (onProgressStream) onProgressStream(errorMsg);
+      return errorMsg;
+    }
+  }, [PROXY_BASE_URL, addActivity, dispatch]);
+
   // ── Employee Chat ──
   const sendEmployee = useCallback(async (overrideText) => {
     const text = (overrideText || empInput).trim();
