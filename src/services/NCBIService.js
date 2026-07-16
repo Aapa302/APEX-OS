@@ -185,6 +185,13 @@ async function searchProtein(query) {
 }
 
 /**
+ * searchPubmed
+ */
+async function searchPubmed(query) {
+  return searchDatabase("pubmed", query);
+}
+
+/**
  * fetchFasta
  */
 async function fetchFasta(accessionId) {
@@ -269,6 +276,7 @@ module.exports = {
   searchGene,
   searchNucleotide,
   searchProtein,
+  searchPubmed,
   fetchFasta,
   fetchGenBank,
   fetchMetadata

@@ -154,6 +154,13 @@ async function runTests() {
 
     await sleep(1500);
 
+    console.log("  - searchPubmed('BRCA1 breast cancer')");
+    const pubmedRes = await ncbiService.searchPubmed("BRCA1 breast cancer");
+    assert.ok(pubmedRes.count > 0, "PubMed search count should be > 0");
+    assert.ok(pubmedRes.ids.length > 0, "PubMed search ids should not be empty");
+
+    await sleep(1500);
+
     console.log("  - fetchFasta('NM_007294.4')");
     const fastaRes = await ncbiService.fetchFasta("NM_007294.4");
     assert.strictEqual(fastaRes.accessionId, "NM_007294.4");
@@ -200,6 +207,19 @@ async function runTests() {
     const routeFastaData = await routeFastaRes.json();
     assert.strictEqual(routeFastaData.accessionId, "NM_007294.4");
     assert.ok(routeFastaData.fasta.includes(">NM_007294.4"), "Route FASTA content should include header");
+
+    await sleep(1500);
+
+    console.log(`  - POST /api/ncbi/search-pubmed`);
+    const routePubmedRes = await fetch(`${BASE_ROUTE_URL}/search-pubmed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "BRCA1" })
+    });
+    assert.strictEqual(routePubmedRes.status, 200, "Search PubMed route should return 200");
+    const routePubmedData = await routePubmedRes.json();
+    assert.ok(routePubmedData.count > 0, "Route PubMed count should be > 0");
+    assert.ok(routePubmedData.ids.length > 0, "Route PubMed ids should not be empty");
 
     console.log("✅ Passed: NCBI Express Routes integration\n");
 
