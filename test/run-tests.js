@@ -223,6 +223,137 @@ async function runTests() {
 
     console.log("✅ Passed: NCBI Express Routes integration\n");
 
+    // ── 6. Test DNA Storage Engineer Service ───────────────────
+    console.log("Testing: DNA Engineer Service direct methods...");
+    const dnaService = require("../src/services/DNAEngineerService");
+    const testPayload = "APEX-OS Digital Payload Block with Reed-Solomon Parity!";
+
+    // Test each strategy for encoding & decoding bit-perfection
+    const strategies = ["base4", "huffman", "reed-solomon", "homopolymer-safe"];
+    for (const strat of strategies) {
+      console.log(`  - Strategy: '${strat}' encode/decode...`);
+      const enc = dnaService.encode(testPayload, strat);
+      assert.strictEqual(enc.success, true);
+      assert.ok(enc.sequence.length > 0, "Sequence should not be empty");
+      assert.ok(enc.fasta.startsWith(">"), "FASTA should start with header");
+
+      const dec = dnaService.decode(enc.fasta);
+      assert.strictEqual(dec.success, true);
+      assert.strictEqual(dec.decoded, testPayload, `Decoded text should exactly match original for ${strat}`);
+      assert.strictEqual(dec.match, true, "SHA-256 hash integrity should validate");
+    }
+
+    console.log("  - Huffman single character edge case...");
+    const singleCharPayload = "AAAAAA";
+    const huffEnc = dnaService.encode(singleCharPayload, "huffman");
+    const huffDec = dnaService.decode(huffEnc.fasta);
+    assert.strictEqual(huffDec.decoded, singleCharPayload, "Single character Huffman decode should exactly match original");
+
+    // Test each strategy for encoding & decoding bit-perfection
+    for (const strat of strategies) {
+      console.log(`  - Strategy: '${strat}' encode/decode (repeat)...`);
+      const enc = dnaService.encode(testPayload, strat);
+      assert.strictEqual(enc.success, true);
+      assert.ok(enc.sequence.length > 0, "Sequence should not be empty");
+      assert.ok(enc.fasta.startsWith(">"), "FASTA should start with header");
+
+      const dec = dnaService.decode(enc.fasta);
+      assert.strictEqual(dec.success, true);
+      assert.strictEqual(dec.decoded, testPayload, `Decoded text should exactly match original for ${strat}`);
+      assert.strictEqual(dec.match, true, "SHA-256 hash integrity should validate");
+    }
+
+    // Test validation
+    console.log("  - DNA Sequence Validation checks...");
+    // Valid sequence
+    const validSeq = "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT";
+    const valResult1 = dnaService.validate(validSeq);
+    assert.strictEqual(valResult1.isValid, true);
+    assert.strictEqual(valResult1.gcImbalance, false, "GC content should be balanced (50%)");
+    assert.strictEqual(valResult1.homopolymerRuns.length, 0, "Should have no homopolymer runs");
+
+    // Invalid character
+    const invalidSeq = "ACGTACGTXACGT";
+    const valResult2 = dnaService.validate(invalidSeq);
+    assert.strictEqual(valResult2.isValid, false);
+    assert.ok(valResult2.reason.includes("Illegal non-nucleotide character"), "Should report invalid character");
+
+    // Homopolymer run
+    const homopolymerSeq = "ACGTACGGGGGGACGT";
+    const valResult3 = dnaService.validate(homopolymerSeq);
+    assert.strictEqual(valResult3.isValid, true);
+    assert.ok(valResult3.homopolymerRuns.length > 0, "Should detect homopolymer runs of 4+ same bases");
+    assert.strictEqual(valResult3.homopolymerRuns[0].base, "G");
+    assert.strictEqual(valResult3.homopolymerRuns[0].length, 6);
+
+    // GC Imbalance
+    const imbalancedSeq = "AAAAAAATTTTTT";
+    const valResult4 = dnaService.validate(imbalancedSeq);
+    assert.strictEqual(valResult4.isValid, true);
+    assert.strictEqual(valResult4.gcImbalance, true, "Should detect GC imbalance (0% GC)");
+
+    // Strategy comparison
+    console.log("  - Strategy Comparative Analysis...");
+    const compResult = dnaService.compare(testPayload);
+    for (const strat of strategies) {
+      assert.ok(compResult[strat], `Comparison should contain results for ${strat}`);
+      assert.strictEqual(compResult[strat].success, true);
+    }
+    console.log("✅ Passed: DNA Engineer Service direct methods\n");
+
+    // ── 7. Test DNA Express Routes Integration ─────────────────
+    console.log("Testing: DNA Express Routes integration...");
+    const BASE_DNA_ROUTE_URL = `http://localhost:${PORT}/api/dna`;
+
+    console.log("  - POST /api/dna/encode (reed-solomon)");
+    const rEncodeRes = await fetch(`${BASE_DNA_ROUTE_URL}/encode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: testPayload, strategy: "reed-solomon" })
+    });
+    assert.strictEqual(rEncodeRes.status, 200, "Encode route should return 200");
+    const rEncodeData = await rEncodeRes.json();
+    assert.strictEqual(rEncodeData.success, true);
+    assert.strictEqual(rEncodeData.strategy, "reed-solomon");
+    assert.ok(rEncodeData.fasta.includes(">APEX_DNA_BLOCK"), "Fasta block should contain custom header");
+
+    console.log("  - POST /api/dna/decode");
+    const rDecodeRes = await fetch(`${BASE_DNA_ROUTE_URL}/decode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sequence: rEncodeData.fasta })
+    });
+    assert.strictEqual(rDecodeRes.status, 200, "Decode route should return 200");
+    const rDecodeData = await rDecodeRes.json();
+    assert.strictEqual(rDecodeData.success, true);
+    assert.strictEqual(rDecodeData.decoded, testPayload);
+    assert.strictEqual(rDecodeData.match, true);
+
+    console.log("  - POST /api/dna/validate");
+    const rValidateRes = await fetch(`${BASE_DNA_ROUTE_URL}/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sequence: rEncodeData.sequence })
+    });
+    assert.strictEqual(rValidateRes.status, 200, "Validate route should return 200");
+    const rValidateData = await rValidateRes.json();
+    assert.strictEqual(rValidateData.isValid, true);
+    assert.ok(rValidateData.gcContent !== undefined);
+
+    console.log("  - POST /api/dna/compare");
+    const rCompareRes = await fetch(`${BASE_DNA_ROUTE_URL}/compare`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: testPayload })
+    });
+    assert.strictEqual(rCompareRes.status, 200, "Compare route should return 200");
+    const rCompareData = await rCompareRes.json();
+    for (const strat of strategies) {
+      assert.ok(rCompareData[strat]);
+      assert.strictEqual(rCompareData[strat].success, true);
+    }
+    console.log("✅ Passed: DNA Express Routes integration\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
