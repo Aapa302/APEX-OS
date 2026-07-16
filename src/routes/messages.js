@@ -48,6 +48,7 @@ router.post("/", validateMessagesBody, async (req, res, next) => {
       content: result.content,
       stop_reason: "end_turn",
       usage: { input_tokens: null, output_tokens: null }, // not available from Gemini REST
+      ...(result.queued ? { queued: true, queueWaitMs: result.queueWaitMs } : {})
     });
   } catch (err) {
     next(err);
@@ -121,6 +122,7 @@ router.post("/json", validateMessagesBody, async (req, res, next) => {
       provider: result.provider,
       content: result.content,
       stop_reason: "end_turn",
+      ...(result.queued ? { queued: true, queueWaitMs: result.queueWaitMs } : {})
     });
   } catch (err) {
     next(err);

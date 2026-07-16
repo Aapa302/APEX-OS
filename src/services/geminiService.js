@@ -12,6 +12,84 @@
 const config = require("../config/env");
 const { getActiveModel, resolveModel } = require("./GeminiModelResolver");
 
+// Throttling and Queueing variables
+const apiCallTimestamps = [];
+const requestQueue = [];
+let isQueueProcessing = false;
+
+// Safe threshold: 15 calls per rolling 60-second window
+const LIMIT_WINDOW_MS = 60000;
+const LIMIT_MAX_CALLS = 15;
+
+function recordCall() {
+  apiCallTimestamps.push(Date.now());
+}
+
+function getActiveCallsCount() {
+  const now = Date.now();
+  while (apiCallTimestamps.length > 0 && now - apiCallTimestamps[0] >= LIMIT_WINDOW_MS) {
+    apiCallTimestamps.shift();
+  }
+  return apiCallTimestamps.length;
+}
+
+function getEstimatedWaitMs() {
+  const count = getActiveCallsCount();
+  if (count < LIMIT_MAX_CALLS) return 0;
+
+  const now = Date.now();
+  const oldestTimestamp = apiCallTimestamps[0];
+  const waitMs = (oldestTimestamp + LIMIT_WINDOW_MS) - now;
+  return Math.max(0, waitMs);
+}
+
+function throttleRequest() {
+  return new Promise((resolve) => {
+    const count = getActiveCallsCount();
+    if (count < LIMIT_MAX_CALLS && requestQueue.length === 0) {
+      recordCall();
+      resolve({ queued: false, queueWaitMs: 0 });
+      return;
+    }
+
+    const startTime = Date.now();
+    const estWaitMs = getEstimatedWaitMs();
+    requestQueue.push({ resolve, startTime });
+
+    console.info(`[GeminiQueue] Request queued. Position: ${requestQueue.length}, Est wait: ${Math.ceil(estWaitMs / 1000)}s`);
+
+    startQueueProcessor();
+  });
+}
+
+function startQueueProcessor() {
+  if (isQueueProcessing) return;
+  isQueueProcessing = true;
+  processQueue();
+}
+
+function processQueue() {
+  if (requestQueue.length === 0) {
+    isQueueProcessing = false;
+    return;
+  }
+
+  const count = getActiveCallsCount();
+  if (count < LIMIT_MAX_CALLS) {
+    const nextItem = requestQueue.shift();
+    if (nextItem) {
+      recordCall();
+      const waitTimeMs = Date.now() - nextItem.startTime;
+      console.info(`[GeminiQueue] Processing queued request. Waited: ${waitTimeMs}ms. Remaining in queue: ${requestQueue.length}`);
+      nextItem.resolve({ queued: true, queueWaitMs: waitTimeMs });
+    }
+    setTimeout(processQueue, 50);
+  } else {
+    const delay = getEstimatedWaitMs();
+    setTimeout(processQueue, Math.max(delay, 100));
+  }
+}
+
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 const GEMINI_FALLBACK_URL = "https://generativelanguage.googleapis.com/v1";
 
@@ -91,10 +169,16 @@ class GeminiError extends Error {
  * @returns {Promise<object>} Anthropic-shaped response: { content: [{type:"text", text}] }
  */
 async function generateContent(messages, system, opts = {}) {
-  return generateContentWithRetry(messages, system, opts, false);
+  const throttleResult = await throttleRequest();
+  const result = await generateContentWithRetry(messages, system, opts, false, false);
+  if (throttleResult.queued) {
+    result.queued = true;
+    result.queueWaitMs = throttleResult.queueWaitMs;
+  }
+  return result;
 }
 
-async function generateContentWithRetry(messages, system, opts = {}, isRetry = false) {
+async function generateContentWithRetry(messages, system, opts = {}, isRetry = false, quotaRetryDone = false) {
   const { jsonMode = false, maxTokens = 1000 } = opts;
 
   // Use strictly the dynamically active resolved model
@@ -196,9 +280,20 @@ async function generateContentWithRetry(messages, system, opts = {}, isRetry = f
         }
 
         if (res.status === 429) {
-          if (data?.error?.message?.includes("quota") || data?.error?.message?.includes("limit: 0")) {
-            lastError = new GeminiError(`Gemini Quota Exceeded. Error: ${data.error.message}`, 429, data.error);
-            break; // try next endpoint
+          const isQuota = data?.error?.message?.toLowerCase().includes("quota") ||
+                          data?.error?.message?.toLowerCase().includes("limit");
+
+          if (isQuota && !quotaRetryDone) {
+            let waitSec = 5; // default backoff
+            const errMsg = data?.error?.message || "";
+            const match = errMsg.match(/(?:retry|wait|after)[^\d]*(\d+(?:\.\d+)?)[^\d]*(?:second|sec|s)/i);
+            if (match) {
+              waitSec = parseFloat(match[1]);
+            }
+            console.warn(`[GeminiService] Retrying after quota error, waiting ${waitSec}s. Error details: ${errMsg}`);
+            await new Promise((resolve) => setTimeout(resolve, waitSec * 1000));
+            // Retry the request once with quotaRetryDone = true
+            return generateContentWithRetry(messages, system, opts, isRetry, true);
           }
 
           if (retryCount < maxRetries) {
