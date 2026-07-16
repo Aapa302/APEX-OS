@@ -354,6 +354,40 @@ async function runTests() {
     }
     console.log("✅ Passed: DNA Express Routes integration\n");
 
+    // ── 8. Test Storage Architect Service ──────────────────────
+    console.log("Testing: Storage Architect Service direct methods...");
+    const architectService = require("../src/services/StorageArchitectService");
+    const sampleAlgos = [
+      { name: "Base-4 Standard", strategy: "base4", density: 2.0, overhead: 0, speed: 85 }
+    ];
+    const sampleDna = [
+      { method: "base4", sequence: "ACGT", hash: "dummy", stats: { density: 2.0, overhead: 0, gcContent: 50.0, homopolymerCount: 0 } }
+    ];
+    const sampleExps = [
+      { hypothesis: "DNA Synthesis: BASE4", accuracy: "100.0% Perfect" }
+    ];
+
+    const evaluation = architectService.evaluateArchitecture(sampleAlgos, sampleDna, sampleExps);
+    assert.strictEqual(evaluation.success, true);
+    assert.ok(evaluation.ranking.length > 0, "Ranking should not be empty");
+    assert.strictEqual(evaluation.recommendation.best, "Homopolymer-Safe Encoder");
+    console.log("✅ Passed: Storage Architect Service direct methods\n");
+
+    // ── 9. Test Storage Architect Express Routes ───────────────
+    console.log("Testing: Storage Architect Express Routes integration...");
+    const BASE_ARCH_ROUTE_URL = `http://localhost:${PORT}/api/architecture`;
+
+    const archRes = await fetch(`${BASE_ARCH_ROUTE_URL}/evaluate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ algorithms: sampleAlgos, dna: sampleDna, experiments: sampleExps })
+    });
+    assert.strictEqual(archRes.status, 200, "Evaluate route should return 200");
+    const archData = await archRes.json();
+    assert.strictEqual(archData.success, true);
+    assert.strictEqual(archData.recommendation.best, "Homopolymer-Safe Encoder");
+    console.log("✅ Passed: Storage Architect Express Routes integration\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
