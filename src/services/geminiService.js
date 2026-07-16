@@ -10,6 +10,7 @@
 // ════════════════════════════════════════════════════════════
 
 const config = require("../config/env");
+const { getActiveModel, resolveModel } = require("./GeminiModelResolver");
 
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 const GEMINI_FALLBACK_URL = "https://generativelanguage.googleapis.com/v1";
@@ -90,10 +91,14 @@ class GeminiError extends Error {
  * @returns {Promise<object>} Anthropic-shaped response: { content: [{type:"text", text}] }
  */
 async function generateContent(messages, system, opts = {}) {
+  return generateContentWithRetry(messages, system, opts, false);
+}
+
+async function generateContentWithRetry(messages, system, opts = {}, isRetry = false) {
   const { jsonMode = false, maxTokens = 1000 } = opts;
 
-  // Use strictly the configured production model (process.env.GEMINI_MODEL)
-  const model = config.geminiModel;
+  // Use strictly the dynamically active resolved model
+  const model = getActiveModel();
 
   // Try both v1beta and v1 endpoints for this model
   const urls = [
@@ -164,6 +169,24 @@ async function generateContent(messages, system, opts = {}) {
         break; // try next endpoint
       }
 
+      const isModelNotFound = res.status === 404 ||
+        (data?.error?.message && (
+          data.error.message.toLowerCase().includes("not found") ||
+          data.error.message.toLowerCase().includes("no longer available") ||
+          data.error.message.toLowerCase().includes("not exist")
+        ));
+
+      if (isModelNotFound && !isRetry) {
+        console.warn(`[GeminiService] Live Gemini API call failed with 404 or "not found" on [${model}]. Initiating self-healing model resolution retry...`);
+        try {
+          await resolveModel();
+          console.info(`[GeminiService] Self-heal complete. Retrying request once with new model [${getActiveModel()}]...`);
+          return generateContentWithRetry(messages, system, opts, true);
+        } catch (resolveErr) {
+          console.error(`[GeminiService] Self-healing resolveModel failed:`, resolveErr.message);
+        }
+      }
+
       if (!res.ok) {
         console.warn(`[GeminiService] Model [${model}] failed on ${cleanUrl} with status ${res.status}:`, data?.error?.message);
 
@@ -221,101 +244,4 @@ async function listModels() {
   }
 }
 
-async function initGeminiModel() {
-  const listUrl = `https://generativelanguage.googleapis.com/v1/models?key=${config.geminiApiKey}`;
-  let resolvedModelName = null;
-
-  try {
-    console.info(`[GeminiService] Listing available Gemini models via: https://generativelanguage.googleapis.com/v1/models`);
-    const res = await fetch(listUrl);
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`ListModels returned status ${res.status}: ${errText}`);
-    }
-    const data = await res.json();
-    const modelsList = data.models || [];
-
-    // Filter models where supportedGenerationMethods includes "generateContent"
-    const validModels = modelsList.filter(m => {
-      const methods = m.supportedGenerationMethods || m.supportedActions || [];
-      return methods.includes("generateContent");
-    });
-
-    // Check if GEMINI_MODEL env var is explicitly set AND present in ListModels response AND is not deprecated
-    const envModel = process.env.GEMINI_MODEL ? process.env.GEMINI_MODEL.trim() : null;
-    const DEPRECATED_MODELS = ["gemini-1.5-flash", "gemini-flash-latest"];
-
-    if (envModel) {
-      const cleanEnvModel = envModel.startsWith("models/") ? envModel.substring(7) : envModel;
-
-      if (DEPRECATED_MODELS.includes(cleanEnvModel)) {
-        console.warn(`[GeminiService] WARNING: Explicitly requested GEMINI_MODEL [${envModel}] is a known deprecated/unsupported model alias. Ignoring and falling back to auto-detection.`);
-      } else {
-        const found = validModels.find(m => {
-          const cleanMName = m.name.startsWith("models/") ? m.name.substring(7) : m.name;
-          return cleanMName === cleanEnvModel;
-        });
-
-        if (found) {
-          resolvedModelName = cleanEnvModel;
-          console.info(`[GeminiService] Found explicitly requested GEMINI_MODEL [${envModel}] in ListModels. Using it.`);
-        } else {
-          console.warn(`[GeminiService] WARNING: Explicitly requested GEMINI_MODEL [${envModel}] was NOT found in ListModels or does not support generateContent. Falling back to auto-detection.`);
-        }
-      }
-    }
-
-    if (!resolvedModelName) {
-      // Auto-detection logic: prefer models with "flash" in the name, then others, excluding deprecated models
-      const activeValidModels = validModels.filter(m => {
-        const cleanMName = m.name.startsWith("models/") ? m.name.substring(7) : m.name;
-        return !DEPRECATED_MODELS.includes(cleanMName);
-      });
-
-      const flashModels = activeValidModels.filter(m => m.name.toLowerCase().includes("flash"));
-      const selectedModelObj = flashModels.length > 0 ? flashModels[0] : activeValidModels[0];
-
-      if (selectedModelObj) {
-        const fullModelName = selectedModelObj.name;
-        resolvedModelName = fullModelName.startsWith("models/") ? fullModelName.substring(7) : fullModelName;
-        console.info(`[GeminiService] Auto-detected best active model: [${resolvedModelName}]`);
-      } else {
-        throw new Error("No non-deprecated models supporting generateContent found in ListModels response.");
-      }
-    }
-  } catch (err) {
-    console.warn(`[GeminiService] ListModels failed (${err.message}). Falling back to probing hardcoded list...`);
-
-    // Fall back to trying this hardcoded list in order: ["gemini-2.5-flash", "gemini-2.0-flash"]
-    const fallbackList = ["gemini-2.5-flash", "gemini-2.0-flash"];
-
-    for (const fallbackModel of fallbackList) {
-      const probeUrl = `https://generativelanguage.googleapis.com/v1/models/${fallbackModel}?key=${config.geminiApiKey}`;
-      try {
-        console.info(`[GeminiService] Probing fallback model [${fallbackModel}] via GET /models/${fallbackModel}...`);
-        const probeRes = await fetch(probeUrl);
-        if (probeRes.ok) {
-          resolvedModelName = fallbackModel;
-          console.info(`[GeminiService] Probe SUCCESS for [${fallbackModel}]. Using it.`);
-          break;
-        } else {
-          console.warn(`[GeminiService] Probe status ${probeRes.status} for fallback model [${fallbackModel}].`);
-        }
-      } catch (probeErr) {
-        console.warn(`[GeminiService] Probe network error for [${fallbackModel}]: ${probeErr.message}`);
-      }
-    }
-
-    if (!resolvedModelName) {
-      // If all else fails, use the config default or first hardcoded fallback to prevent startup crash
-      resolvedModelName = config.geminiModel || "gemini-2.5-flash";
-      console.warn(`[GeminiService] All fallback probes failed. Defaulting to: [${resolvedModelName}]`);
-    }
-  }
-
-  // Cache the resolved model name in config
-  config.geminiModel = resolvedModelName;
-  console.log("Resolved Gemini model: " + resolvedModelName);
-}
-
-module.exports = { generateContent, listModels, GeminiError, toGeminiContents, toAnthropicResponse, initGeminiModel };
+module.exports = { generateContent, listModels, GeminiError, toGeminiContents, toAnthropicResponse };
