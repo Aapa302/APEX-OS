@@ -941,8 +941,51 @@ const callClaudeJSON = async (messages, system, maxTokens = 1000) => {
 
 // ── CEO ORCHESTRATOR ─────────────────────────────────────
 const CEOOrchestrator = {
-  run: async ({ goal, company, memory, dispatch, addActivity, toast, setStage, setProgress, abort, runRealResearch, runRealAlgorithmEngineering, runRealDNAEngineering, runRealSimulationEngineering, runRealStorageArchitect }) => {
-    const log = (msg, icon="🤖") => { addActivity(msg, icon); setStage(msg); dispatch({ type:"ADD_AUTO_LOG", payload:{ id:`log_${Date.now()}_${Math.random().toString(36).slice(2,5)}`, msg, icon, time:new Date().toLocaleTimeString() } }); };
+  run: async ({ goal, company, memory, dispatch, addActivity, toast, setStage, setProgress, abort, runRealResearch, runRealAlgorithmEngineering, runRealDNAEngineering, runRealSimulationEngineering, runRealStorageArchitect, isFromChat }) => {
+    console.log(`[CEOOrchestrator] Core execution triggered. Goal: "${goal}", isFromChat: ${!!isFromChat}`);
+    const log = (msg, icon="🤖") => {
+      console.log(`[CEOOrchestrator Logs] ${msg}`);
+      addActivity(msg, icon);
+      setStage(msg);
+      dispatch({ type:"ADD_AUTO_LOG", payload:{ id:`log_${Date.now()}_${Math.random().toString(36).slice(2,5)}`, msg, icon, time:new Date().toLocaleTimeString() } });
+    };
+
+    const updateLiveChatSummary = () => {
+      if (!isFromChat) return;
+
+      const getStatusIcon = (status) => {
+        if (status === "completed") return "✅ Done";
+        if (status === "running") return "⏳ Running";
+        if (status === "waiting") return "⏱️ Waiting";
+        if (status === "failed") return "❌ Failed";
+        return "📁 Queued";
+      };
+
+      const researchTask = tasksToRun.find(t => t.assigned_employee === "researcher");
+      const algoTask = tasksToRun.find(t => t.assigned_employee === "architect");
+      const dnaTask = tasksToRun.find(t => t.assigned_employee === "biologist");
+      const simTask = tasksToRun.find(t => t.assigned_employee === "data_sci");
+      const archTask = tasksToRun.find(t => t.assigned_employee === "storage_arch");
+
+      const logLines = tasksToRun.flatMap(t => (t.logs || []).map(l => `[${t.phase}] ${l}`)).slice(-5);
+
+      const summary = `👑 **APEX Autonomous Company Orchestrator**
+🛠️ Classification: **ORCHESTRATOR MODE** (Executing corporate pipeline)
+
+### 📈 Pipeline Status Matrix:
+- **🔬 Research Engineer (Dr. Mei Lin)**: ${getStatusIcon(researchTask?.status)}
+- **📐 Algorithm Architect (Julian D.)**: ${getStatusIcon(algoTask?.status)}
+- **🧬 Computational Biologist (Dr. Elena S.)**: ${getStatusIcon(dnaTask?.status)}
+- **📈 Data Scientist (Sophia L.)**: ${getStatusIcon(simTask?.status)}
+- **🗄️ Storage Architect (Dr. Marcus V.)**: ${getStatusIcon(archTask?.status)}
+
+---
+
+### 📡 Active Task Log Stream:
+${logLines.map(line => `> ${line}`).join("\n") || "> Initializing queue..."}
+`;
+      dispatch({ type: "UPDATE_CEO_LAST", payload: { content: summary, streaming: true } });
+    };
 
     try {
       setProgress(0);
@@ -1105,19 +1148,25 @@ const CEOOrchestrator = {
       tasksToRun.forEach(t => {
         dispatch({ type: "ADD_TASK", payload: t });
       });
+      updateLiveChatSummary();
 
       toast(`Execution Engine initialized: ${tasksToRun.length} tasks generated.`, "info");
       setProgress(10);
 
       // Async task executor with automatic retries and logs piping
       const executeTaskAsync = async (task) => {
-        dispatch({ type: "UPDATE_TASK", id: task.id, payload: { status: "running", startedAt: new Date().toISOString() } });
+        console.log(`[CEOOrchestrator Task Dispatcher] Starting Task ${task.id} (${task.phase}) assigned to ${task.assigned_employee}`);
+        task.status = "running";
+        task.logs = [`[INFO] Task initialized at ${new Date().toLocaleTimeString()}`];
+        dispatch({ type: "UPDATE_TASK", id: task.id, payload: { status: "running", startedAt: new Date().toISOString(), logs: task.logs } });
         log(`⚡ Started execution on: "${task.title}"`, "⚡");
+        updateLiveChatSummary();
 
-        const logs = [`[INFO] Task initialized at ${new Date().toLocaleTimeString()}`];
         const logCallback = (msg) => {
-          logs.push(msg);
-          dispatch({ type: "UPDATE_TASK", id: task.id, payload: { logs: [...logs], step: msg.slice(-80) } });
+          console.log(`[CEOOrchestrator Task Logs] [Task ${task.id}] ${msg}`);
+          task.logs.push(msg);
+          dispatch({ type: "UPDATE_TASK", id: task.id, payload: { logs: [...task.logs], step: msg.slice(-80) } });
+          updateLiveChatSummary();
         };
 
         let success = false;
@@ -1127,6 +1176,7 @@ const CEOOrchestrator = {
 
         while (retries < maxRetries && !success) {
           try {
+            console.log(`[CEOOrchestrator Task Dispatcher] Attempt ${retries + 1} for task ${task.id}`);
             if (task.assigned_employee === "researcher") {
               reply = await runRealResearch(task.title, logCallback);
             } else if (task.assigned_employee === "architect") {
@@ -1141,23 +1191,31 @@ const CEOOrchestrator = {
             success = true;
           } catch (e) {
             retries++;
-            logs.push(`⚠️ [RETRY ${retries}/${maxRetries}] Execution failed: ${e.message}`);
-            dispatch({ type: "UPDATE_TASK", id: task.id, payload: { logs: [...logs] } });
+            console.warn(`[CEOOrchestrator Task Dispatcher] Attempt ${retries} failed for task ${task.id}. Error: ${e.message}`);
+            task.logs.push(`⚠️ [RETRY ${retries}/${maxRetries}] Execution failed: ${e.message}`);
+            dispatch({ type: "UPDATE_TASK", id: task.id, payload: { logs: [...task.logs] } });
+            updateLiveChatSummary();
             await sleepMs(1000);
           }
         }
 
         if (success) {
+          console.log(`[CEOOrchestrator Task Dispatcher] Task ${task.id} successfully completed.`);
           task.status = "completed";
           task.output = reply;
-          dispatch({ type: "UPDATE_TASK", id: task.id, payload: { status: "completed", completedAt: new Date().toISOString(), output: reply, progress: 100 } });
+          task.logs.push(`✓ Task completed successfully.`);
+          dispatch({ type: "UPDATE_TASK", id: task.id, payload: { status: "completed", completedAt: new Date().toISOString(), output: reply, progress: 100, logs: task.logs } });
           dispatch({ type: "ADD_MEMORY", payload: { id: `mem_${Date.now()}`, category: "insight", content: `Completed ${task.phase}: ${reply.slice(0, 200)}`, createdAt: new Date().toISOString() } });
           log(`✓ Task completed: "${task.title}"`, "✓");
+          updateLiveChatSummary();
         } else {
+          console.error(`[CEOOrchestrator Task Dispatcher] Task ${task.id} failed after ${maxRetries} attempts.`);
           task.status = "failed";
-          dispatch({ type: "UPDATE_TASK", id: task.id, payload: { status: "failed", completedAt: new Date().toISOString(), logs: [...logs, "❌ Escalated: Task failed after maximum retries. Escalated to CEO Executive Stack."] } });
+          task.logs.push(`❌ Task failed after all retries.`);
+          dispatch({ type: "UPDATE_TASK", id: task.id, payload: { status: "failed", completedAt: new Date().toISOString(), logs: [...task.logs, "❌ Escalated: Task failed after maximum retries. Escalated to CEO Executive Stack."] } });
           log(`❌ Task failed: "${task.title}"`, "❌");
           toast(`Task failure on ${task.assigned_employee} escalated to CEO!`, "error");
+          updateLiveChatSummary();
         }
       };
 
@@ -1185,7 +1243,9 @@ const CEOOrchestrator = {
               executeTaskAsync(task); // fire and forget, loop checks status
             } else if (task.status === "queued") {
               task.status = "waiting";
-              dispatch({ type: "UPDATE_TASK", id: task.id, payload: { status: "waiting" } });
+              task.logs = ["Waiting for dependencies..."];
+              dispatch({ type: "UPDATE_TASK", id: task.id, payload: { status: "waiting", logs: task.logs } });
+              updateLiveChatSummary();
             }
           }
         }
@@ -1245,8 +1305,12 @@ ${outputs.storage_arch ? `\`\`\`markdown\n${outputs.storage_arch.slice(0, 300)}.
 
 ⚡ **BIOLOGICAL INSIGHT**: Reconstructing data successfully completed. Real execution pipeline verified.`;
 
-      dispatch({ type: "ADD_CEO_MSG", payload: { id: `u_${Date.now()}`, role: "user", content: goal, display: `📊 Run Plan: "${goal.slice(0,35)}..."` } });
-      dispatch({ type: "ADD_CEO_MSG", payload: { id: `a_${Date.now()}`, role: "assistant", content: finalReport, loading: false } });
+      if (isFromChat) {
+        dispatch({ type: "UPDATE_CEO_LAST", payload: { content: finalReport, streaming: false } });
+      } else {
+        dispatch({ type: "ADD_CEO_MSG", payload: { id: `u_${Date.now()}`, role: "user", content: goal, display: `📊 Run Plan: "${goal.slice(0,35)}..."` } });
+        dispatch({ type: "ADD_CEO_MSG", payload: { id: `a_${Date.now()}`, role: "assistant", content: finalReport, loading: false } });
+      }
 
       setProgress(100);
       log("🚀 Autonomous execution engine complete!", "🚀");
@@ -3381,6 +3445,14 @@ export default function ApexOS() {
     } else if (normalizedText.includes("architecture") && (normalizedText.includes("report") || normalizedText.includes("paper") || normalizedText.includes("document"))) {
       isRealCommand = true;
       commandType = "architecture-report";
+    } else if (
+      normalizedText.includes("run entire company") ||
+      normalizedText.includes("run company") ||
+      normalizedText.includes("autonomous company") ||
+      normalizedText.includes("company orchestrator")
+    ) {
+      isRealCommand = true;
+      commandType = "run-entire-company";
     }
 
     // BUILD MODE Classification Rule
@@ -3436,6 +3508,49 @@ export default function ApexOS() {
 
           dispatch({ type: "UPDATE_CEO_LAST", payload: { content: finalMarkdown, streaming: false } });
           setCeoStream("");
+
+        } else if (commandType === "run-entire-company") {
+          console.log("[CEO Chat Router] Matching 'Run Entire Company' command.");
+          let baseText = await simulateProgress([
+            "👑 **APEX CEO DIRECTIVE: Run Entire Company Orchestration**",
+            "🛠️ Classification: **ORCHESTRATOR MODE** (Triggering 5-stage corporate pipeline)",
+            "📡 Initializing autonomous company task queue scheduler...",
+            "🔬 Activating Research, Algorithm, DNA, Simulation, and Architecture modules...",
+            "🚀 Spawning real-time task executors..."
+          ], 600);
+
+          abortRef.current = false;
+          setAutoRunning(true);
+          setAutoProgress(0);
+          setView("chat");
+
+          CEOOrchestrator.run({
+            goal: text,
+            company: state.company,
+            memory: state.memory,
+            dispatch,
+            addActivity,
+            toast,
+            setStage: setAutoStage,
+            setProgress: setAutoProgress,
+            abort: abortRef,
+            runRealResearch,
+            runRealAlgorithmEngineering,
+            runRealDNAEngineering,
+            runRealSimulationEngineering,
+            runRealStorageArchitect,
+            isFromChat: true
+          }).then((res) => {
+            console.log("[CEO Chat Router] Orchestration complete:", res);
+            setAutoRunning(false);
+            setAutoStage("");
+            setAutoProgress(0);
+          }).catch((err) => {
+            console.error("[CEO Chat Router] Orchestration failed:", err);
+            setAutoRunning(false);
+            setAutoStage("");
+            setAutoProgress(0);
+          });
 
         } else if (commandType === "show-architecture") {
           let baseText = await simulateProgress([
