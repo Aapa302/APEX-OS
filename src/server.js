@@ -27,7 +27,7 @@ const messagesRouter = require("./routes/messages");
 const healthRouter = require("./routes/health");
 const exportRouter = require("./routes/export");
 const ncbiRouter = require("./routes/ncbi");
-const { initGeminiModel } = require("./services/geminiService");
+const { resolveModel } = require("./services/GeminiModelResolver");
 
 const app = express();
 
@@ -96,7 +96,7 @@ let server;
 
 (async () => {
   try {
-    await initGeminiModel();
+    await resolveModel();
   } catch (initErr) {
     console.error("Critical: Failed to initialize Gemini model on startup:", initErr.message);
   }
