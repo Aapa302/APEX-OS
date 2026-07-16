@@ -388,6 +388,43 @@ async function runTests() {
     assert.strictEqual(archData.recommendation.best, "Homopolymer-Safe Encoder");
     console.log("✅ Passed: Storage Architect Express Routes integration\n");
 
+    // ── 10. Test Company Orchestrator Service ──────────────────
+    console.log("Testing: Company Orchestrator Service direct methods...");
+    const orchestratorService = require("../src/services/CompanyOrchestratorService");
+
+    const readiness = orchestratorService.generateReadinessReport({});
+    assert.strictEqual(readiness.success, true);
+    assert.strictEqual(readiness.report.overallCompletionPercentage, 98);
+    assert.ok(readiness.report.employees.length > 0);
+
+    const taskSim = orchestratorService.executeAutonomousTask("Test Task", "biologist");
+    assert.ok(["COMPLETED", "FAILED"].includes(taskSim.status));
+    console.log("✅ Passed: Company Orchestrator Service direct methods\n");
+
+    // ── 11. Test Company Orchestrator Express Routes ───────────
+    console.log("Testing: Company Orchestrator Express Routes integration...");
+    const BASE_COMPANY_ROUTE_URL = `http://localhost:${PORT}/api/company`;
+
+    const reportRes = await fetch(`${BASE_COMPANY_ROUTE_URL}/report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    assert.strictEqual(reportRes.status, 200, "Report route should return 200");
+    const reportData = await reportRes.json();
+    assert.strictEqual(reportData.success, true);
+    assert.strictEqual(reportData.report.overallCompletionPercentage, 98);
+
+    const execRes = await fetch(`${BASE_COMPANY_ROUTE_URL}/execute-task`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskName: "Simulate Transcription", agentId: "biologist" })
+    });
+    assert.strictEqual(execRes.status, 200, "Execute task route should return 200");
+    const execData = await execRes.json();
+    assert.ok(["COMPLETED", "FAILED"].includes(execData.status));
+    console.log("✅ Passed: Company Orchestrator Express Routes integration\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
