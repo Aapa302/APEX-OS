@@ -3506,9 +3506,14 @@ APEX OS has loaded the **DNA Lab** synthesizer.
   // ── Real Research Workflow for Research Engineer ──
   const runRealResearch = useCallback(async (query, onProgressStream) => {
     addActivity(`Dr. Mei Lin initiated research: "${query}"`, "🔬");
+    let progressLog = `🔬 **RESEARCH IN PROGRESS** for query: "${query}"\n\n`;
     if (onProgressStream) {
-      onProgressStream(`🔬 **RESEARCH IN PROGRESS** for query: "${query}"\n\n`);
+      onProgressStream(progressLog);
     }
+    const logProgress = (msg) => {
+      progressLog += msg;
+      if (onProgressStream) onProgressStream(progressLog);
+    };
 
     let geneResults = null;
     let nucleotideResults = null;
@@ -3518,7 +3523,7 @@ APEX OS has loaded the **DNA Lab** synthesizer.
     let pubmedResults = null;
 
     try {
-      if (onProgressStream) onProgressStream(prev => prev + `📡 Querying NCBI databases...\n`);
+      logProgress(`📡 Querying NCBI databases...\n`);
 
       const searchTerms = query.replace(/(?:search|find|papers|publications|research)\s+/i, "").trim();
 
@@ -3571,7 +3576,7 @@ APEX OS has loaded the **DNA Lab** synthesizer.
       }
 
       if (accessionToFetch) {
-        if (onProgressStream) onProgressStream(prev => prev + `🧬 Downloading real-world FASTA sequence & biological coordinates...\n`);
+        logProgress(`🧬 Downloading real-world FASTA sequence & biological coordinates...\n`);
         try {
           const fastaRes = await fetch(`${PROXY_BASE_URL}/api/ncbi/fetch-fasta`, {
             method: "POST",
@@ -3599,7 +3604,7 @@ APEX OS has loaded the **DNA Lab** synthesizer.
         }
       }
 
-      if (onProgressStream) onProgressStream(prev => prev + `📚 Scanning PubMed database for scientific literature...\n`);
+      logProgress(`📚 Scanning PubMed database for scientific literature...\n`);
       try {
         const pmRes = await fetch(`${PROXY_BASE_URL}/api/ncbi/search-pubmed`, {
           method: "POST",
@@ -3636,7 +3641,7 @@ One or more required scientific repositories returned no results for query \`"${
         return failureReport;
       }
 
-      if (onProgressStream) onProgressStream(prev => prev + `✍️ Synthesizing formal research report with evidence-based annotations...\n`);
+      logProgress(`✍️ Synthesizing formal research report with evidence-based annotations...\n`);
 
       const rawPayload = {
         query: searchTerms,
@@ -3748,9 +3753,14 @@ Compile this data and produce a comprehensive, professional report.`;
   // ── Real Algorithm Engineering Workflow for Algorithm Architect ──
   const runRealAlgorithmEngineering = useCallback(async (query, taskType = "create", onProgressStream) => {
     addActivity(`Julian D. initiated algorithm engineering task: "${query}"`, "📐");
+    let progressLog = `📐 **ALGORITHM ENGINEERING PIPELINE INITIALIZED** for task: "${query}"\n\n`;
     if (onProgressStream) {
-      onProgressStream(`📐 **ALGORITHM ENGINEERING PIPELINE INITIALIZED** for task: "${query}"\n\n`);
+      onProgressStream(progressLog);
     }
+    const logProgress = (msg) => {
+      progressLog += msg;
+      if (onProgressStream) onProgressStream(progressLog);
+    };
 
     const researchHistory = state.research || [];
     if (researchHistory.length === 0) {
@@ -3764,16 +3774,12 @@ No prior scientific research records or NCBI/PubMed data found inside APEX Corpo
       return failureReport;
     }
 
-    if (onProgressStream) {
-      onProgressStream(prev => prev + `🔍 Reading ${researchHistory.length} research profile(s) from Research Memory...\n`);
-    }
+    logProgress(`🔍 Reading ${researchHistory.length} research profile(s) from Research Memory...\n`);
 
     const latestResearch = researchHistory[0];
 
     try {
-      if (onProgressStream) {
-        onProgressStream(prev => prev + `🧬 Compiling DNA biochemical constraints (GC-content, homopolymers)...\n`);
-      }
+      logProgress(`🧬 Compiling DNA biochemical constraints (GC-content, homopolymers)...\n`);
 
       const systemPrompt = `You are Julian D., Algorithm Architect at the company. Expert in turning complex problems into elegant, efficient algorithms, and complexity analysis (O-notation).
 You MUST design a valid, highly efficient synthetic DNA storage algorithm based strictly on the provided real biological research.
@@ -3831,9 +3837,7 @@ Empirical Research Profile to incorporate:
 
 Please design the DNA storage algorithm and generate complete implementations. Ensure high performance and correctness.`;
 
-      if (onProgressStream) {
-        onProgressStream(prev => prev + `🧠 Invoking neural architect models for compilation...\n`);
-      }
+      logProgress(`🧠 Invoking neural architect models for compilation...\n`);
 
       const reportText = await callClaude(
         [{ role: "user", content: userPrompt }],
@@ -3966,9 +3970,14 @@ Please design the DNA storage algorithm and generate complete implementations. E
   // ── Real DNA Engineering Workflow for Computational Biologist ──
   const runRealDNAEngineering = useCallback(async (query, taskType = "encode", filePayload = null, onProgressStream) => {
     addActivity(`Dr. Elena S. initiated DNA engineering task: "${query}"`, "🧬");
+    let progressLog = `🧬 **DNA STORAGE ENGINEERING PIPELINE** [Mode: ${taskType.toUpperCase()}]\n\n`;
     if (onProgressStream) {
-      onProgressStream(`🧬 **DNA STORAGE ENGINEERING PIPELINE** [Mode: ${taskType.toUpperCase()}]\n\n`);
+      onProgressStream(progressLog);
     }
+    const logProgress = (msg) => {
+      progressLog += msg;
+      if (onProgressStream) onProgressStream(progressLog);
+    };
 
     const sha256 = async (str) => {
       try {
@@ -3995,22 +4004,16 @@ Please design the DNA storage algorithm and generate complete implementations. E
         complexity: "n"
       };
 
-      if (onProgressStream) {
-        onProgressStream(prev => prev + `⚙️ Loading deployed encoding protocol: **${activeAlgorithm.name}**...\n`);
-      }
+      logProgress(`⚙️ Loading deployed encoding protocol: **${activeAlgorithm.name}**...\n`);
 
       if (taskType === "encode") {
         const sourceData = filePayload || query.replace(/(?:encode|compress|write)\s+/i, "").trim() || "APEX OS Digital Payload Block";
-        if (onProgressStream) {
-          onProgressStream(prev => prev + `📥 Source payload received (Size: ${sourceData.length} chars). Generating checksum...\n`);
-        }
+        logProgress(`📥 Source payload received (Size: ${sourceData.length} chars). Generating checksum...\n`);
 
         const dataHash = await sha256(sourceData);
 
         const binaryBits = sourceData.split('').map(char => char.charCodeAt(0).toString(2).padStart(8, '0')).join('');
-        if (onProgressStream) {
-          onProgressStream(prev => prev + `💻 Digitized source into ${binaryBits.length} bits. Applying chunking & index indexing...\n`);
-        }
+        logProgress(`💻 Digitized source into ${binaryBits.length} bits. Applying chunking & index indexing...\n`);
 
         const chunkSize = 64;
         const chunks = [];
@@ -4018,9 +4021,7 @@ Please design the DNA storage algorithm and generate complete implementations. E
           chunks.push(binaryBits.slice(i, i + chunkSize));
         }
 
-        if (onProgressStream) {
-          onProgressStream(prev => prev + `📦 Partitioned binary into ${chunks.length} structured sequence blocks. Prepending headers...\n`);
-        }
+        logProgress(`📦 Partitioned binary into ${chunks.length} structured sequence blocks. Prepending headers...\n`);
 
         const dnaSequences = [];
         let totalGCBases = 0;
@@ -4122,9 +4123,7 @@ ${fastaOutput.slice(0, 500)}${fastaOutput.length > 500 ? "\n... [truncated for b
 
       } else if (taskType === "decode") {
         const targetFasta = query.trim();
-        if (onProgressStream) {
-          onProgressStream(prev => prev + `📥 Loading FASTA records for transcription...\n`);
-        }
+        logProgress(`📥 Loading FASTA records for transcription...\n`);
 
         const storedDNA = (state.lab.dna || []).find(d => d.sequence.includes(targetFasta) || targetFasta.includes(d.hash) || d.hash.includes(targetFasta));
 
@@ -4139,18 +4138,14 @@ No corresponding records or matching SHA-256 blocks could be resolved in the DNA
           return failureReport;
         }
 
-        if (onProgressStream) {
-          onProgressStream(prev => prev + `🧬 Reverse translating nucleotide sequences to digital bits...\n`);
-        }
+        logProgress(`🧬 Reverse translating nucleotide sequences to digital bits...\n`);
 
         const decodedText = storedDNA.original;
         const checkHash = await sha256(decodedText);
 
         const hashesMatch = checkHash === storedDNA.hash;
 
-        if (onProgressStream) {
-          onProgressStream(prev => prev + `🛡️ Verifying SHA-256 hash match: ${checkHash} ...\n`);
-        }
+        logProgress(`🛡️ Verifying SHA-256 hash match: ${checkHash} ...\n`);
 
         if (!hashesMatch) {
           const failureReport = `⚠️ **DNA INTEGRITY VERIFICATION FAILED**
@@ -4212,9 +4207,14 @@ Mismatched SHA-256 hash detected! The reverse-transcribed checksum does not alig
   // ── Real Simulation Engineering Workflow for Data Scientist ──
   const runRealSimulationEngineering = useCallback(async (query, taskType = "simulation", onProgressStream) => {
     addActivity(`Sophia L. initiated DNA simulation task: "${query}"`, "📈");
+    let progressLog = `📈 **VIRTUAL DNA LABORATORY SIMULATOR ACTIVE**\n\n`;
     if (onProgressStream) {
-      onProgressStream(`📈 **VIRTUAL DNA LABORATORY SIMULATOR ACTIVE**\n\n`);
+      onProgressStream(progressLog);
     }
+    const logProgress = (msg) => {
+      progressLog += msg;
+      if (onProgressStream) onProgressStream(progressLog);
+    };
 
     const storedDNA = state.lab.dna || [];
     if (storedDNA.length === 0) {
@@ -4231,9 +4231,7 @@ No prior custom DNA sequence blocks found inside APEX DNA Storage Engine.
     const targetDNA = storedDNA[0];
 
     try {
-      if (onProgressStream) {
-        onProgressStream(prev => prev + `🧬 Initializing Virtual Synthesis model for sequence block: **SHA256-${targetDNA.hash.slice(0,8)}**...\n`);
-      }
+      logProgress(`🧬 Initializing Virtual Synthesis model for sequence block: **SHA256-${targetDNA.hash.slice(0,8)}**...\n`);
 
       const normalizedQuery = query.toLowerCase();
       let techProfile = "illumina";
@@ -4267,10 +4265,8 @@ No prior custom DNA sequence blocks found inside APEX DNA Storage Engine.
         fragmentLossProb = 0.005;
       }
 
-      if (onProgressStream) {
-        onProgressStream(prev => prev + `⚙️ Configured Sequencing Technology: **${techProfile}**\n`);
-        onProgressStream(prev => prev + `🧪 Simulating Exponential PCR Amplification (${pcrCycles} cycles, fragment loss: ${fragmentLossProb*100}%)...\n`);
-      }
+      logProgress(`⚙️ Configured Sequencing Technology: **${techProfile}**\n`);
+      logProgress(`🧪 Simulating Exponential PCR Amplification (${pcrCycles} cycles, fragment loss: ${fragmentLossProb*100}%)...\n`);
 
       let pcrMolecules = 1;
       let pcrEfficiency = 0.85;
@@ -4278,10 +4274,8 @@ No prior custom DNA sequence blocks found inside APEX DNA Storage Engine.
         pcrMolecules += pcrMolecules * pcrEfficiency * (1 - fragmentLossProb);
       }
 
-      if (onProgressStream) {
-        onProgressStream(prev => prev + `📡 Amplified total virtual sequence pool to **${pcrMolecules.toLocaleString(undefined, {maximumFractionDigits: 0})}** molecules.\n`);
-        onProgressStream(prev => prev + `💥 Injecting random mutations (substitutions, insertions, deletions, homopolymer failures)...\n`);
-      }
+      logProgress(`📡 Amplified total virtual sequence pool to **${pcrMolecules.toLocaleString(undefined, {maximumFractionDigits: 0})}** molecules.\n`);
+      logProgress(`💥 Injecting random mutations (substitutions, insertions, deletions, homopolymer failures)...\n`);
 
       const totalBasesCount = parseInt(targetDNA.bases) || 100;
       const readAccuracyVal = (100 - (errorRate * 100)).toFixed(3);
@@ -4341,9 +4335,7 @@ Empirical DNA Synthesis Profile to stress-test:
 - Sequence Stability Index: ${seqStabilityVal}%
 - Overall Decoding Status: ${decodeSuccess ? "SUCCESS" : "FAILED"}`;
 
-      if (onProgressStream) {
-        onProgressStream(prev => prev + `✍️ Synthesizing formal data science simulation report...\n`);
-      }
+      logProgress(`✍️ Synthesizing formal data science simulation report...\n`);
 
       const reportText = await callClaude(
         [{ role: "user", content: userPrompt }],
