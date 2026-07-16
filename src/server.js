@@ -28,6 +28,7 @@ const healthRouter = require("./routes/health");
 const exportRouter = require("./routes/export");
 const ncbiRouter = require("./routes/ncbi");
 const dnaRouter = require("./routes/dna");
+const architectureRouter = require("./routes/architecture");
 const { resolveModel } = require("./services/GeminiModelResolver");
 
 const app = express();
@@ -86,6 +87,7 @@ app.use("/v1/messages", messagesRouter);
 app.use("/v1/export", exportRouter);
 app.use("/api/ncbi", ncbiRouter);
 app.use("/api/dna", dnaRouter);
+app.use("/api/architecture", architectureRouter);
 
 // ── 404 ──────────────────────────────────────────────────────
 app.use(notFoundHandler);
