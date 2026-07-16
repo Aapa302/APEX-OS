@@ -241,41 +241,53 @@ async function initGeminiModel() {
       return methods.includes("generateContent");
     });
 
-    // Check if GEMINI_MODEL env var is explicitly set AND present in ListModels response
+    // Check if GEMINI_MODEL env var is explicitly set AND present in ListModels response AND is not deprecated
     const envModel = process.env.GEMINI_MODEL ? process.env.GEMINI_MODEL.trim() : null;
+    const DEPRECATED_MODELS = ["gemini-1.5-flash", "gemini-flash-latest"];
+
     if (envModel) {
       const cleanEnvModel = envModel.startsWith("models/") ? envModel.substring(7) : envModel;
-      const found = validModels.find(m => {
-        const cleanMName = m.name.startsWith("models/") ? m.name.substring(7) : m.name;
-        return cleanMName === cleanEnvModel;
-      });
 
-      if (found) {
-        resolvedModelName = cleanEnvModel;
-        console.info(`[GeminiService] Found explicitly requested GEMINI_MODEL [${envModel}] in ListModels. Using it.`);
+      if (DEPRECATED_MODELS.includes(cleanEnvModel)) {
+        console.warn(`[GeminiService] WARNING: Explicitly requested GEMINI_MODEL [${envModel}] is a known deprecated/unsupported model alias. Ignoring and falling back to auto-detection.`);
       } else {
-        console.warn(`[GeminiService] WARNING: Explicitly requested GEMINI_MODEL [${envModel}] was NOT found in ListModels or does not support generateContent. Falling back to auto-detection.`);
+        const found = validModels.find(m => {
+          const cleanMName = m.name.startsWith("models/") ? m.name.substring(7) : m.name;
+          return cleanMName === cleanEnvModel;
+        });
+
+        if (found) {
+          resolvedModelName = cleanEnvModel;
+          console.info(`[GeminiService] Found explicitly requested GEMINI_MODEL [${envModel}] in ListModels. Using it.`);
+        } else {
+          console.warn(`[GeminiService] WARNING: Explicitly requested GEMINI_MODEL [${envModel}] was NOT found in ListModels or does not support generateContent. Falling back to auto-detection.`);
+        }
       }
     }
 
     if (!resolvedModelName) {
-      // Auto-detection logic: prefer models with "flash" in the name, then others
-      const flashModels = validModels.filter(m => m.name.toLowerCase().includes("flash"));
-      const selectedModelObj = flashModels.length > 0 ? flashModels[0] : validModels[0];
+      // Auto-detection logic: prefer models with "flash" in the name, then others, excluding deprecated models
+      const activeValidModels = validModels.filter(m => {
+        const cleanMName = m.name.startsWith("models/") ? m.name.substring(7) : m.name;
+        return !DEPRECATED_MODELS.includes(cleanMName);
+      });
+
+      const flashModels = activeValidModels.filter(m => m.name.toLowerCase().includes("flash"));
+      const selectedModelObj = flashModels.length > 0 ? flashModels[0] : activeValidModels[0];
 
       if (selectedModelObj) {
         const fullModelName = selectedModelObj.name;
         resolvedModelName = fullModelName.startsWith("models/") ? fullModelName.substring(7) : fullModelName;
         console.info(`[GeminiService] Auto-detected best active model: [${resolvedModelName}]`);
       } else {
-        throw new Error("No models supporting generateContent found in ListModels response.");
+        throw new Error("No non-deprecated models supporting generateContent found in ListModels response.");
       }
     }
   } catch (err) {
     console.warn(`[GeminiService] ListModels failed (${err.message}). Falling back to probing hardcoded list...`);
 
-    // Fall back to trying this hardcoded list in order: ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
-    const fallbackList = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
+    // Fall back to trying this hardcoded list in order: ["gemini-2.5-flash", "gemini-2.0-flash"]
+    const fallbackList = ["gemini-2.5-flash", "gemini-2.0-flash"];
 
     for (const fallbackModel of fallbackList) {
       const probeUrl = `https://generativelanguage.googleapis.com/v1/models/${fallbackModel}?key=${config.geminiApiKey}`;
