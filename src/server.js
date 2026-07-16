@@ -27,6 +27,7 @@ const messagesRouter = require("./routes/messages");
 const healthRouter = require("./routes/health");
 const exportRouter = require("./routes/export");
 const ncbiRouter = require("./routes/ncbi");
+const { initGeminiModel } = require("./services/geminiService");
 
 const app = express();
 
@@ -91,34 +92,48 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // ── Start ─────────────────────────────────────────────────────
-const server = app.listen(config.port, () => {
-  logger.info(`APEX Gemini Proxy running`, {
-    port: config.port,
-    env: config.nodeEnv,
-    provider: config.aiProvider,
-    model: config.geminiModel,
-    cors: config.corsOrigin,
-    rateLimitPerMin: config.rateLimitMaxRequests,
-  });
-  logger.info(`Proxy endpoint: http://localhost:${config.port}/v1/messages`);
-  logger.info(`Health check:   http://localhost:${config.port}/health`);
+let server;
 
-  // Warn if NCBI API Key is missing
-  if (!config.ncbiApiKey) {
-    logger.warn(`⚠️ Warning: NCBI API Key is not set. Routes under /api/ncbi/ will return errors until NCBI_API_KEY or VITE_NCBI_API_KEY is provided.`);
-  } else {
-    const keySource = process.env.NCBI_API_KEY ? "NCBI_API_KEY" : "VITE_NCBI_API_KEY";
-    logger.info(`NCBI Biological Data Service active (${keySource} is configured)`);
+(async () => {
+  try {
+    await initGeminiModel();
+  } catch (initErr) {
+    console.error("Critical: Failed to initialize Gemini model on startup:", initErr.message);
   }
-});
+
+  server = app.listen(config.port, () => {
+    logger.info(`APEX Gemini Proxy running`, {
+      port: config.port,
+      env: config.nodeEnv,
+      provider: config.aiProvider,
+      model: config.geminiModel,
+      cors: config.corsOrigin,
+      rateLimitPerMin: config.rateLimitMaxRequests,
+    });
+    logger.info(`Proxy endpoint: http://localhost:${config.port}/v1/messages`);
+    logger.info(`Health check:   http://localhost:${config.port}/health`);
+
+    // Warn if NCBI API Key is missing
+    if (!config.ncbiApiKey) {
+      logger.warn(`⚠️ Warning: NCBI API Key is not set. Routes under /api/ncbi/ will return errors until NCBI_API_KEY or VITE_NCBI_API_KEY is provided.`);
+    } else {
+      const keySource = process.env.NCBI_API_KEY ? "NCBI_API_KEY" : "VITE_NCBI_API_KEY";
+      logger.info(`NCBI Biological Data Service active (${keySource} is configured)`);
+    }
+  });
+})();
 
 // ── Graceful shutdown ─────────────────────────────────────────
 function shutdown(signal) {
   logger.info(`Received ${signal}. Shutting down gracefully…`);
-  server.close(() => {
-    logger.info("Server closed.");
+  if (server) {
+    server.close(() => {
+      logger.info("Server closed.");
+      process.exit(0);
+    });
+  } else {
     process.exit(0);
-  });
+  }
   setTimeout(() => {
     logger.error("Forced shutdown after timeout.");
     process.exit(1);

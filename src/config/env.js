@@ -20,7 +20,7 @@ function requireEnv(name) {
 const config = {
   geminiApiKey: requireEnv("GEMINI_API_KEY"),
   aiProvider: (process.env.AI_PROVIDER || "gemini").trim(),
-  geminiModel: (process.env.GEMINI_MODEL || "gemini-flash-latest").trim(),
+  geminiModel: (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim(),
   port: parseInt(process.env.PORT || "8787", 10),
   nodeEnv: process.env.NODE_ENV || "development",
   corsOrigin: process.env.CORS_ORIGIN || "*",
