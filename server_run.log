@@ -1,3 +1,0 @@
-
-❌ Missing required environment variable: GEMINI_API_KEY
-   Copy .env.example to .env and fill it in.
