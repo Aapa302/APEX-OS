@@ -135,6 +135,9 @@ function toAnthropicResponse(geminiData, actualModel) {
   const candidate = geminiData?.candidates?.[0];
   const parts = candidate?.content?.parts || [];
   const text = parts.map((p) => p.text || "").join("");
+  const finishReason = candidate?.finishReason || "UNKNOWN";
+
+  console.info(`[GeminiResponse] Generated response text. finishReason: ${finishReason}, length: ${text.length} chars`);
 
   if (!text && candidate?.finishReason && candidate.finishReason !== "STOP") {
     // Model refused, hit a safety filter, or ran out of tokens with no output.
@@ -179,7 +182,13 @@ async function generateContent(messages, system, opts = {}) {
 }
 
 async function generateContentWithRetry(messages, system, opts = {}, isRetry = false, quotaRetryDone = false) {
-  const { jsonMode = false, maxTokens = 1000 } = opts;
+  const { jsonMode = false } = opts;
+  let maxTokens = opts.maxTokens || 1000;
+
+  // Enforce reasonable safety ceiling (cap at 10000 max)
+  if (maxTokens > 10000) {
+    maxTokens = 10000;
+  }
 
   // Use strictly the dynamically active resolved model
   const model = getActiveModel();
@@ -217,6 +226,8 @@ async function generateContentWithRetry(messages, system, opts = {}, isRetry = f
       ...(jsonMode ? { response_mime_type: "application/json" } : {})
     }
   };
+
+  console.info(`[GeminiRequest] model: ${model}, maxOutputTokens: ${maxTokens}, jsonMode: ${jsonMode}`);
 
   let lastError = null;
 
