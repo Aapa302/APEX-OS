@@ -4695,17 +4695,21 @@ APEX OS has opened the **Experiment Manager** inside the **Research Lab**.
           setLabTab("algorithms");
           setView("lab");
           addActivity("Opened Algorithm Studio", "📐");
-          toast("Algorithm Studio loaded", "info");
 
-          const finalMarkdown = `👑 **APEX CEO DIRECTIVE: Load Algorithm Studio**
-🛠️ Classification: **RUN MODE** (Opening existing Algorithm module)
+          const algos = state.lab.algorithms || [];
+          let mdList = algos.map((a, i) => `### ${i+1}. ${a.name} (Score: ${a.score}/100)
+- **Density**: ${a.density} | **Error Rate**: ${a.errorRate}
+- **GC Balance**: ${a.gcBalance} | **Homopolymer Avoidance**: ${a.homopolymer}
+- **Complexity**: O(${a.complexity})`).join("\n\n");
 
-✅ **WORKFLOW TRANSITION COMPLETE**
+          const finalMarkdown = `👑 **APEX CEO DIRECTIVE: List Designed DNA Storage Algorithms**
+🛠️ Classification: **RUN MODE** (Querying Algorithm Library)
 
-APEX OS has opened the **Algorithm Studio** inside the **Research Lab**.
+✅ **ALGORITHM LIBRARY PARSED SUCCESSFULLY**
 
-- **Vault count**: currently displaying **${state.lab.algorithms.length}** theoretical algorithms.
-- Theoretical foundations, formulas, and Big-O complexity profiles are loaded in the studio.`;
+${mdList || "No custom algorithms compiled in library yet. Ask the Algorithm Engineer (Julian D.) to 'Create DNA algorithm' first."}
+
+⚡ **CEO DIRECTIVE**: Current Algorithm Library listed.`;
 
           dispatch({ type: "UPDATE_CEO_LAST", payload: { content: finalMarkdown, streaming: false } });
           setCeoStream("");
@@ -4998,19 +5002,22 @@ ${JSON.stringify(rawPayload, null, 2)}
 Compile this data and produce a comprehensive, professional report.`;
 
       let reportText = "";
-      try {
-        if (executionMode === "Local") {
-          throw new Error("Execution mode set to local only.");
-        }
-        reportText = await callClaude(
-          [{ role: "user", content: userPrompt }],
-          systemPrompt
-        );
-      } catch (geminiErr) {
-        console.warn("[Research Engineer Fallback] Gemini call failed or bypassed, generating report locally:", geminiErr.message);
-        toast("Gemini is offline. Utilizing local deterministic NCBI/PubMed summarizer.", "warning");
-        setGeminiStatus("offline");
+      const isCreative = searchTerms.includes("explain") || searchTerms.includes("summarize") || searchTerms.includes("synthesize") || searchTerms.includes("creative") || searchTerms.includes("analyze") || searchTerms.includes("improve");
+      if (executionMode === "Local" || !isCreative) {
+        console.log("[Research Engineer] Executing in Local Tool mode (bypassing LLM).");
         reportText = generateLocalResearchReport(searchTerms, rawPayload);
+      } else {
+        try {
+          reportText = await callClaude(
+            [{ role: "user", content: userPrompt }],
+            systemPrompt
+          );
+        } catch (geminiErr) {
+          console.warn("[Research Engineer Fallback] Gemini call failed, generating report locally:", geminiErr.message);
+          toast("Gemini is offline. Utilizing local deterministic NCBI/PubMed summarizer.", "warning");
+          setGeminiStatus("offline");
+          reportText = generateLocalResearchReport(searchTerms, rawPayload);
+        }
       }
 
       const reportParsed = parseResearchReport(reportText);
@@ -5937,29 +5944,32 @@ Empirical DNA Synthesis Profile to stress-test:
       logProgress(`✍️ Synthesizing formal data science simulation report...\n`);
 
       let reportText = "";
-      try {
-        if (executionMode === "Local") {
-          throw new Error("Execution mode set to local only.");
-        }
-        reportText = await callClaude(
-          [{ role: "user", content: userPrompt }],
-          systemPrompt
-        );
-      } catch (geminiErr) {
-        console.warn("[Simulation Engineer Fallback] Gemini call failed or bypassed, generating simulation report locally:", geminiErr.message);
-        toast("Gemini is offline. Using local deterministic data science simulator.", "warning");
-        setGeminiStatus("offline");
-        const simData = {
-          techProfile,
-          pcrMolecules,
-          recoveryRateVal,
-          finalErrorRateVal,
-          storageDensityVal,
-          seqStabilityVal,
-          readAccuracyVal,
-          decodeSuccess
-        };
+      const isCreative = query.toLowerCase().includes("explain") || query.toLowerCase().includes("summarize") || query.toLowerCase().includes("creative") || query.toLowerCase().includes("analyze") || query.toLowerCase().includes("improve");
+      const simData = {
+        techProfile,
+        pcrMolecules,
+        recoveryRateVal,
+        finalErrorRateVal,
+        storageDensityVal,
+        seqStabilityVal,
+        readAccuracyVal,
+        decodeSuccess
+      };
+      if (executionMode === "Local" || !isCreative) {
+        console.log("[Simulation Engineer] Executing in Local Tool mode (bypassing LLM).");
         reportText = generateLocalSimulationReport(query, simData);
+      } else {
+        try {
+          reportText = await callClaude(
+            [{ role: "user", content: userPrompt }],
+            systemPrompt
+          );
+        } catch (geminiErr) {
+          console.warn("[Simulation Engineer Fallback] Gemini call failed or bypassed, generating simulation report locally:", geminiErr.message);
+          toast("Gemini is offline. Using local deterministic data science simulator.", "warning");
+          setGeminiStatus("offline");
+          reportText = generateLocalSimulationReport(query, simData);
+        }
       }
 
       if (onProgressStream) {
