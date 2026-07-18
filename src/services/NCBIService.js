@@ -25,25 +25,18 @@ class NCBIError extends Error {
  */
 function getApiKey() {
   const apiKey = (process.env.NCBI_API_KEY || "").trim() || (process.env.VITE_NCBI_API_KEY || "").trim();
-  if (!apiKey) {
-    throw new NCBIError("NCBI API Key is missing. Please configure NCBI_API_KEY or VITE_NCBI_API_KEY in the environment.", 401);
-  }
-  return apiKey;
+  return apiKey || null;
 }
 
 /**
- * Performs a fetch to NCBI E-utilities API
+ * Low-level utility to perform a single fetch request to NCBI E-utilities API
  */
-async function callNCBI(utility, params = {}, options = {}) {
-  const apiKey = getApiKey();
-
+async function performFetch(utility, params, apiKeyToUse, options) {
   // Construct URL with parameters
   const urlParams = new URLSearchParams();
 
-  // Only append API key if it's not a mock/dummy/test key
-  const isMock = ["mock_key", "dummy_key", "test_key"].includes(apiKey.toLowerCase());
-  if (!isMock) {
-    urlParams.append("api_key", apiKey);
+  if (apiKeyToUse) {
+    urlParams.append("api_key", apiKeyToUse);
   }
 
   for (const [key, val] of Object.entries(params)) {
@@ -53,6 +46,10 @@ async function callNCBI(utility, params = {}, options = {}) {
   }
 
   const url = `${NCBI_BASE_URL}/${utility}?${urlParams.toString()}`;
+
+  // Log exactly what is sent to NCBI (redacting key) as requested by Task 5
+  const sanitizedUrl = url.replace(/api_key=[^&]+/, "api_key=REDACTED");
+  logger.info(`[NCBI Request] Utility: ${utility}, URL: ${sanitizedUrl}`);
 
   // Implement a 15-second timeout using AbortController
   const controller = new AbortController();
@@ -72,21 +69,24 @@ async function callNCBI(utility, params = {}, options = {}) {
 
     if (!response.ok) {
       const errText = await response.text();
+      // Log exactly what NCBI returned on failure as requested by Task 5
+      logger.error(`[NCBI Response Failure] Utility: ${utility}, Status: ${response.status}, Body: ${errText}`);
       throw new NCBIError(`NCBI API returned status ${response.status}: ${errText}`, response.status);
     }
 
     if (options.isText) {
       const text = await response.text();
       if (text.includes("Error:") || text.includes("Failed to understand id")) {
+        logger.error(`[NCBI Response text Error] Utility: ${utility}, Content: ${text.trim()}`);
         throw new NCBIError(`NCBI returned error: ${text.trim()}`, 400);
       }
       return text;
     } else {
       const json = await response.json();
       if (json.error) {
-        // e.g. "API key invalid" or similar
         const errMsg = typeof json.error === "string" ? json.error : JSON.stringify(json.error);
-        if (errMsg.toLowerCase().includes("key invalid")) {
+        logger.error(`[NCBI Response JSON Error] Utility: ${utility}, Error: ${errMsg}`);
+        if (errMsg.toLowerCase().includes("key invalid") || errMsg.toLowerCase().includes("invalid api key")) {
           throw new NCBIError("Invalid NCBI API Key.", 401);
         }
         throw new NCBIError(`NCBI returned error: ${errMsg}`, 400);
@@ -98,6 +98,52 @@ async function callNCBI(utility, params = {}, options = {}) {
     if (error.name === "AbortError") {
       throw new NCBIError("NCBI request timed out after 15 seconds.", 504);
     }
+    throw error;
+  }
+}
+
+/**
+ * Performs a fetch to NCBI E-utilities API with API key handling and robust retries
+ */
+async function callNCBI(utility, params = {}, options = {}) {
+  const apiKey = getApiKey();
+
+  // Determine if we should attempt using the API key
+  let apiKeyToUse = null;
+  if (apiKey) {
+    const isMock = ["mock_key", "dummy_key", "test_key", "your_ncbi_api_key", "api_key_here", "placeholder"].some(m => apiKey.toLowerCase().includes(m));
+    if (!isMock) {
+      apiKeyToUse = apiKey;
+    } else {
+      logger.warn(`[NCBI Service] Detected mock/placeholder API key "${apiKey}". Proceeding without API key.`);
+    }
+  }
+
+  try {
+    return await performFetch(utility, params, apiKeyToUse, options);
+  } catch (error) {
+    // Check if error is related to invalid API key
+    const errorString = (error.message || "") + (error.details || "");
+    const isKeyInvalid = error.status === 401 ||
+                         (error.status === 400 && (
+                           errorString.toLowerCase().includes("key invalid") ||
+                           errorString.toLowerCase().includes("api key invalid") ||
+                           errorString.toLowerCase().includes("invalid_api_key")
+                         ));
+
+    if (apiKeyToUse && isKeyInvalid) {
+      logger.warn(`[NCBI Service] Request failed due to invalid API key. Retrying request without API key parameter...`);
+      try {
+        return await performFetch(utility, params, null, options);
+      } catch (retryError) {
+        if (retryError instanceof NCBIError) {
+          throw retryError;
+        }
+        logger.error("NCBI Service retry error:", retryError);
+        throw new NCBIError(`Failed to reach NCBI on retry: ${retryError.message}`, 502);
+      }
+    }
+
     if (error instanceof NCBIError) {
       throw error;
     }
