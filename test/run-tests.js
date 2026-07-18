@@ -425,6 +425,96 @@ async function runTests() {
     assert.ok(["COMPLETED", "FAILED"].includes(execData.status));
     console.log("✅ Passed: Company Orchestrator Express Routes integration\n");
 
+    // ── 12. Test Tasks Express Routes ──────────────────────────
+    console.log("Testing: Tasks Express Routes integration...");
+    const BASE_TASKS_URL = `http://localhost:${PORT}/tasks`;
+
+    // A. Clean up / read initial tasks
+    const initialTasksRes = await fetch(BASE_TASKS_URL);
+    assert.strictEqual(initialTasksRes.status, 200, "GET /tasks should return 200");
+    const initialTasks = await initialTasksRes.json();
+    assert.ok(Array.isArray(initialTasks), "GET /tasks should return an array");
+    const initialLength = initialTasks.length;
+
+    // B. Create a new task (POST /tasks)
+    console.log("  - POST /tasks (create task)");
+    const createTaskRes = await fetch(BASE_TASKS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Test Task Alpha",
+        description: "Verify that backend persistent storage works.",
+        phase: "Testing",
+        column: "todo",
+        assignee: "QA Engineer",
+        priority: "high"
+      })
+    });
+    assert.strictEqual(createTaskRes.status, 201, "POST /tasks should return 201 created");
+    const taskData = await createTaskRes.json();
+    assert.ok(taskData.id, "Created task should have an ID");
+    assert.strictEqual(taskData.title, "Test Task Alpha");
+    assert.strictEqual(taskData.phase, "Testing");
+    assert.strictEqual(taskData.column, "todo");
+    assert.strictEqual(taskData.assignee, "QA Engineer");
+    assert.strictEqual(taskData.priority, "high");
+    assert.ok(taskData.createdAt, "Created task should have createdAt timestamp");
+
+    // C. Test duplicate checking
+    console.log("  - POST /tasks (duplicate block)");
+    const dupTaskRes = await fetch(BASE_TASKS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "  test task alpha  ", // leading/trailing spaces and mixed casing
+        phase: "testing",
+        description: "This is a duplicate",
+        column: "inprogress"
+      })
+    });
+    assert.strictEqual(dupTaskRes.status, 400, "POST /tasks with duplicate title+phase should return 400");
+    const dupData = await dupTaskRes.json();
+    assert.ok(dupData.error, "Duplicate error response should contain error message");
+
+    // D. Verify task list updated
+    console.log("  - GET /tasks (list update)");
+    const updatedTasksRes = await fetch(BASE_TASKS_URL);
+    const updatedTasks = await updatedTasksRes.json();
+    assert.strictEqual(updatedTasks.length, initialLength + 1, "Tasks list count should increase by 1");
+    const foundTask = updatedTasks.find(t => t.id === taskData.id);
+    assert.ok(foundTask, "The created task should be in the retrieved tasks list");
+
+    // E. Update task column (PATCH /tasks/:id)
+    console.log(`  - PATCH /tasks/${taskData.id} (move column)`);
+    const updateTaskRes = await fetch(`${BASE_TASKS_URL}/${taskData.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        column: "inprogress"
+      })
+    });
+    assert.strictEqual(updateTaskRes.status, 200, "PATCH /tasks/:id should return 200");
+    const updatedTaskData = await updateTaskRes.json();
+    assert.strictEqual(updatedTaskData.column, "inprogress", "Task column should be updated to 'inprogress'");
+
+    // F. Delete task (DELETE /tasks/:id)
+    console.log(`  - DELETE /tasks/${taskData.id} (delete task)`);
+    const deleteTaskRes = await fetch(`${BASE_TASKS_URL}/${taskData.id}`, {
+      method: "DELETE"
+    });
+    assert.strictEqual(deleteTaskRes.status, 200, "DELETE /tasks/:id should return 200");
+    const deleteData = await deleteTaskRes.json();
+    assert.strictEqual(deleteData.task.id, taskData.id, "Returned deleted task should match the ID");
+
+    // G. Verify deletion
+    const finalTasksRes = await fetch(BASE_TASKS_URL);
+    const finalTasks = await finalTasksRes.json();
+    assert.strictEqual(finalTasks.length, initialLength, "Tasks length should revert to initial size");
+    const deletedTaskLookup = finalTasks.find(t => t.id === taskData.id);
+    assert.ok(!deletedTaskLookup, "Deleted task should no longer exist in the tasks list");
+
+    console.log("✅ Passed: Tasks Express Routes integration\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
