@@ -734,6 +734,7 @@ function appReducer(state, action) {
     case "UPD_EMP_LAST": next = { ...state, empChats: { ...state.empChats, [action.empId]: (state.empChats[action.empId]||[]).map((m,i,a)=>i===a.length-1?{...m,...action.payload}:m) } }; break;
     case "SET_PLAN": next = { ...state, activePlan: action.payload }; break;
     case "ADD_REVIEW": next = { ...state, reviews: [action.payload,...(state.reviews||[])].slice(0,50) }; break;
+    case "SET_RESEARCH": next = { ...state, research: action.payload }; break;
     case "ADD_RESEARCH": next = { ...state, research: [action.payload,...(state.research||[])].slice(0,50) }; break;
     case "ADD_BUILD": next = { ...state, builds: [action.payload, ...(state.builds||[])].slice(0,30) }; break;
     case "UPDATE_BUILD": next = { ...state, builds: (state.builds||[]).map(b => b.id===action.id ? { ...b, ...action.payload } : b) }; break;
@@ -3702,6 +3703,22 @@ export default function ApexOS() {
     loadChat();
   }, [activeEmp, state.proxyUrl]);
 
+  // Load shared persistent research reports on mount or proxy change
+  useEffect(() => {
+    const loadResearch = async () => {
+      try {
+        const res = await fetch(`${PROXY_BASE_URL}/research-reports`);
+        if (res.ok) {
+          const data = await res.json();
+          dispatch({ type: "SET_RESEARCH", payload: data });
+        }
+      } catch (err) {
+        console.error("Error loading research reports:", err);
+      }
+    };
+    loadResearch();
+  }, [state.proxyUrl]);
+
   // ── Scroll to bottom ──
   useEffect(() => { ceoChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [state.ceoChats, ceoStream]);
   useEffect(() => { empChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [state.empChats, empStream]);
@@ -5344,6 +5361,17 @@ Compile this data and produce a comprehensive, professional report.`;
       };
 
       dispatch({ type: "ADD_RESEARCH", payload: researchEntry });
+
+      // Save report persistently to backend disk store
+      try {
+        await fetch(`${PROXY_BASE_URL}/research-reports`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ report: researchEntry })
+        });
+      } catch (e) {
+        console.error("Error saving research report to backend:", e);
+      }
 
       MemoryEngine.store(dispatch, {
         category: "insight",

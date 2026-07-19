@@ -666,6 +666,47 @@ async function runTests() {
 
     console.log("✅ Passed: Team Chat Express Routes integration\n");
 
+    // ── 15. Test Research Reports Express Routes ───────────────
+    console.log("Testing: Research Reports Express Routes integration...");
+    const BASE_REPORTS_URL = `http://localhost:${PORT}/research-reports`;
+
+    // A. Read initial reports list
+    const initialReportsRes = await fetch(BASE_REPORTS_URL);
+    assert.strictEqual(initialReportsRes.status, 200, "GET /research-reports should return 200");
+    const initialReports = await initialReportsRes.json();
+    assert.ok(Array.isArray(initialReports), "GET /research-reports should return an array");
+    const initialReportsLength = initialReports.length;
+
+    // B. Save a new report (POST /research-reports)
+    console.log("  - POST /research-reports (save report)");
+    const createReportRes = await fetch(BASE_REPORTS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        report: {
+          id: "res_test_12345",
+          query: "BRCA1 genetic drift notes",
+          executiveSummary: "This represents BRCA1 notes.",
+          confidenceScore: 92
+        }
+      })
+    });
+    assert.strictEqual(createReportRes.status, 201, "POST /research-reports should return 201 created");
+    const savedReport = await createReportRes.json();
+    assert.strictEqual(savedReport.id, "res_test_12345");
+    assert.strictEqual(savedReport.query, "BRCA1 genetic drift notes");
+    assert.strictEqual(savedReport.executiveSummary, "This represents BRCA1 notes.");
+    assert.strictEqual(savedReport.confidenceScore, 92);
+
+    // C. Verify report list count increased
+    const updatedReportsRes = await fetch(BASE_REPORTS_URL);
+    const updatedReports = await updatedReportsRes.json();
+    assert.strictEqual(updatedReports.length, initialReportsLength + 1, "Reports count should increase by 1");
+    const foundReport = updatedReports.find(r => r.id === "res_test_12345");
+    assert.ok(foundReport, "The created report should be in the retrieved list");
+
+    console.log("✅ Passed: Research Reports Express Routes integration\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
