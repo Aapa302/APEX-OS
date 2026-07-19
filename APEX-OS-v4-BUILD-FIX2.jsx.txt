@@ -3691,33 +3691,29 @@ export default function ApexOS() {
   useEffect(() => {
     const loadChat = async () => {
       try {
-        const res = await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`);
-        if (res.ok) {
-          const data = await res.json();
-          dispatch({ type: "SET_EMP_CHAT", empId: activeEmp, payload: data });
-        }
+        const res = await fetchWithRetry(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {});
+        const data = await res.json();
+        dispatch({ type: "SET_EMP_CHAT", empId: activeEmp, payload: data });
       } catch (err) {
         console.error("Error loading employee chat:", err);
       }
     };
     loadChat();
-  }, [activeEmp, state.proxyUrl]);
+  }, [activeEmp, state.proxyUrl, view]);
 
   // Load shared persistent research reports on mount or proxy change
   useEffect(() => {
     const loadResearch = async () => {
       try {
-        const res = await fetch(`${PROXY_BASE_URL}/research-reports`);
-        if (res.ok) {
-          const data = await res.json();
-          dispatch({ type: "SET_RESEARCH", payload: data });
-        }
+        const res = await fetchWithRetry(`${PROXY_BASE_URL}/research-reports`, {});
+        const data = await res.json();
+        dispatch({ type: "SET_RESEARCH", payload: data });
       } catch (err) {
         console.error("Error loading research reports:", err);
       }
     };
     loadResearch();
-  }, [state.proxyUrl]);
+  }, [state.proxyUrl, view]);
 
   // ── Scroll to bottom ──
   useEffect(() => { ceoChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [state.ceoChats, ceoStream]);
@@ -5364,7 +5360,7 @@ Compile this data and produce a comprehensive, professional report.`;
 
       // Save report persistently to backend disk store
       try {
-        await fetch(`${PROXY_BASE_URL}/research-reports`, {
+        await fetchWithRetry(`${PROXY_BASE_URL}/research-reports`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ report: researchEntry })
@@ -6353,12 +6349,12 @@ Empirical DNA Synthesis Profile to stress-test:
 
     // POST user and assistant messages to backend
     try {
-      await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+      await fetchWithRetry(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userMsg })
       });
-      await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+      await fetchWithRetry(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: assistantMsg })
@@ -6396,7 +6392,7 @@ Empirical DNA Synthesis Profile to stress-test:
 
       // PATCH assistant message to backend with final reply
       try {
-        await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+        await fetchWithRetry(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messageId: assistantMsgId, content: reply, streaming: false })
@@ -6409,7 +6405,7 @@ Empirical DNA Synthesis Profile to stress-test:
 
       // PATCH assistant message to backend with error
       try {
-        await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+        await fetchWithRetry(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messageId: assistantMsgId, content: `⚠️ Error: ${e.message}`, streaming: false })
