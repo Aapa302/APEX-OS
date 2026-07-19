@@ -76,7 +76,7 @@ router.patch("/:memberId", async (req, res, next) => {
 
     const chats = await readChats();
     const history = chats[memberId] || [];
-    const idx = history.findIndex(m => m.id === messageId || (messageId === undefined && m.streaming));
+    const idx = history.findIndex(m => String(m.id) === String(messageId) || (messageId === undefined && m.streaming));
 
     if (idx === -1) {
       if (history.length > 0) {
