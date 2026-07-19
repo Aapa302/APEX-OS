@@ -86,6 +86,35 @@ const limiter = rateLimit({
 });
 app.use("/v1", limiter);
 
+// ── DNA-Encoder-v1 Endpoints ────────────────────────────────
+app.post("/dna-encode", (req, res, next) => {
+  try {
+    const text = req.body.text || req.body.data;
+    if (text === undefined) {
+      return res.status(400).json({ error: "Required parameter 'text' or 'data' is missing." });
+    }
+    const encoderV1 = require("./services/DNAEncoderV1Service");
+    const dna = encoderV1.encode(text);
+    res.json({ success: true, dna, text });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/dna-decode", (req, res, next) => {
+  try {
+    const dna = req.body.dna || req.body.sequence;
+    if (dna === undefined) {
+      return res.status(400).json({ error: "Required parameter 'dna' or 'sequence' is missing." });
+    }
+    const encoderV1 = require("./services/DNAEncoderV1Service");
+    const text = encoderV1.decode(dna);
+    res.json({ success: true, text, dna });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ── Routes ───────────────────────────────────────────────────
 app.use("/health", healthRouter);
 app.use("/v1/messages", messagesRouter);

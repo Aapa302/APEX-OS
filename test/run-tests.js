@@ -707,6 +707,36 @@ async function runTests() {
 
     console.log("✅ Passed: Research Reports Express Routes integration\n");
 
+    // ── 16. Test DNA Encoder V1 Express Routes ───────────────────
+    console.log("Testing: DNA Encoder V1 Express Routes integration...");
+    const BASE_V1_URL = `http://localhost:${PORT}`;
+
+    // Test Encoding
+    console.log("  - POST /dna-encode (text -> DNA)");
+    const v1EncodeRes = await fetch(`${BASE_V1_URL}/dna-encode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "APEX-1" })
+    });
+    assert.strictEqual(v1EncodeRes.status, 200, "POST /dna-encode should return 200");
+    const v1EncodeData = await v1EncodeRes.json();
+    assert.strictEqual(v1EncodeData.success, true);
+    assert.ok(v1EncodeData.dna, "Should return encoded DNA sequence");
+
+    // Test Decoding
+    console.log("  - POST /dna-decode (DNA -> text)");
+    const v1DecodeRes = await fetch(`${BASE_V1_URL}/dna-decode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dna: v1EncodeData.dna })
+    });
+    assert.strictEqual(v1DecodeRes.status, 200, "POST /dna-decode should return 200");
+    const v1DecodeData = await v1DecodeRes.json();
+    assert.strictEqual(v1DecodeData.success, true);
+    assert.strictEqual(v1DecodeData.text, "APEX-1", "Decoded text must exactly match 'APEX-1'");
+
+    console.log("✅ Passed: DNA Encoder V1 Express Routes integration\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
