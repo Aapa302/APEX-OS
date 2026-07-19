@@ -590,6 +590,82 @@ async function runTests() {
 
     console.log("✅ Passed: Simulations Express Routes integration\n");
 
+    // ── 14. Test Team Chat Express Routes ──────────────────────
+    console.log("Testing: Team Chat Express Routes integration...");
+    const BASE_CHAT_URL = `http://localhost:${PORT}/team-chat`;
+
+    // A. Read initial chat history for an arbitrary employee
+    const initialChatRes = await fetch(`${BASE_CHAT_URL}/researcher`);
+    assert.strictEqual(initialChatRes.status, 200, "GET /team-chat/:memberId should return 200");
+    const initialChat = await initialChatRes.json();
+    assert.ok(Array.isArray(initialChat), "GET /team-chat/:memberId should return an array");
+
+    // B. Save a user message (POST /team-chat/:memberId)
+    console.log("  - POST /team-chat/:memberId (save message)");
+    const saveUserRes = await fetch(`${BASE_CHAT_URL}/researcher`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          id: 111111,
+          role: "user",
+          content: "Hello Dr. Mei Lin",
+          display: "Hello Dr. Mei Lin"
+        }
+      })
+    });
+    assert.strictEqual(saveUserRes.status, 201, "POST should return 201 created");
+    const savedChat = await saveUserRes.json();
+    assert.ok(savedChat.length > 0, "Returned array should contain the new message");
+    const lastMsg = savedChat[savedChat.length - 1];
+    assert.strictEqual(lastMsg.id, 111111);
+    assert.strictEqual(lastMsg.role, "user");
+    assert.strictEqual(lastMsg.content, "Hello Dr. Mei Lin");
+
+    // C. Save assistant streaming message (POST)
+    const saveAssistantRes = await fetch(`${BASE_CHAT_URL}/researcher`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          id: 222222,
+          role: "assistant",
+          content: "",
+          streaming: true
+        }
+      })
+    });
+    assert.strictEqual(saveAssistantRes.status, 201);
+
+    // D. Update assistant reply (PATCH /team-chat/:memberId)
+    console.log("  - PATCH /team-chat/:memberId (update reply)");
+    const patchRes = await fetch(`${BASE_CHAT_URL}/researcher`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messageId: 222222,
+        content: "Hello! I am Mei.",
+        streaming: false
+      })
+    });
+    assert.strictEqual(patchRes.status, 200);
+    const patchedHistory = await patchRes.json();
+    const patchedMsg = patchedHistory.find(m => m.id === 222222);
+    assert.ok(patchedMsg);
+    assert.strictEqual(patchedMsg.content, "Hello! I am Mei.");
+    assert.strictEqual(patchedMsg.streaming, false);
+
+    // E. Clear Chat (DELETE /team-chat/:memberId)
+    console.log("  - DELETE /team-chat/:memberId (clear history)");
+    const clearRes = await fetch(`${BASE_CHAT_URL}/researcher`, {
+      method: "DELETE"
+    });
+    assert.strictEqual(clearRes.status, 200);
+    const clearedHistory = await clearRes.json();
+    assert.strictEqual(clearedHistory.length, 0, "Cleared history should be an empty array");
+
+    console.log("✅ Passed: Team Chat Express Routes integration\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {

@@ -711,6 +711,7 @@ function appReducer(state, action) {
     case "SETUP_DONE": next = { ...state, setupDone: true }; break;
     case "ADD_CEO_MSG": next = { ...state, ceoChats: [...state.ceoChats, action.payload] }; break;
     case "UPDATE_CEO_LAST": next = { ...state, ceoChats: state.ceoChats.map((m, i) => i === state.ceoChats.length - 1 ? { ...m, ...action.payload } : m) }; break;
+    case "SET_EMP_CHAT": next = { ...state, empChats: { ...state.empChats, [action.empId]: action.payload } }; break;
     case "ADD_EMP_MSG": next = { ...state, empChats: { ...state.empChats, [action.empId]: [...(state.empChats[action.empId] || []), action.payload] } }; break;
     case "UPDATE_EMP_LAST": next = { ...state, empChats: { ...state.empChats, [action.empId]: (state.empChats[action.empId] || []).map((m, i, arr) => i === arr.length - 1 ? { ...m, ...action.payload } : m) } }; break;
     case "ADD_TASK": next = { ...state, tasks: [...state.tasks, action.payload] }; break;
@@ -3685,6 +3686,22 @@ export default function ApexOS() {
     return () => clearInterval(interval);
   }, [state.proxyUrl]);
 
+  // Load active employee chat on change
+  useEffect(() => {
+    const loadChat = async () => {
+      try {
+        const res = await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`);
+        if (res.ok) {
+          const data = await res.json();
+          dispatch({ type: "SET_EMP_CHAT", empId: activeEmp, payload: data });
+        }
+      } catch (err) {
+        console.error("Error loading employee chat:", err);
+      }
+    };
+    loadChat();
+  }, [activeEmp, state.proxyUrl]);
+
   // ── Scroll to bottom ──
   useEffect(() => { ceoChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [state.ceoChats, ceoStream]);
   useEffect(() => { empChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [state.empChats, empStream]);
@@ -6296,9 +6313,31 @@ Empirical DNA Synthesis Profile to stress-test:
       setEmpFile(null);
     }
 
-    dispatch({ type: "ADD_EMP_MSG", empId: activeEmp, payload: { id: Date.now(), role: "user", content, display: text } });
-    dispatch({ type: "ADD_EMP_MSG", empId: activeEmp, payload: { id: Date.now() + 1, role: "assistant", content: "", streaming: true } });
+    const userMsgId = Date.now();
+    const assistantMsgId = Date.now() + 1;
+
+    const userMsg = { id: userMsgId, role: "user", content, display: text };
+    const assistantMsg = { id: assistantMsgId, role: "assistant", content: "", streaming: true };
+
+    dispatch({ type: "ADD_EMP_MSG", empId: activeEmp, payload: userMsg });
+    dispatch({ type: "ADD_EMP_MSG", empId: activeEmp, payload: assistantMsg });
     setEmpLoading(true); setEmpStream("");
+
+    // POST user and assistant messages to backend
+    try {
+      await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMsg })
+      });
+      await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: assistantMsg })
+      });
+    } catch (e) {
+      console.error("Error saving user/assistant messages to backend:", e);
+    }
 
     try {
       let reply;
@@ -6326,8 +6365,28 @@ Empirical DNA Synthesis Profile to stress-test:
       dispatch({ type: "UPDATE_EMP_LAST", empId: activeEmp, payload: { content: reply, streaming: false } });
       setEmpStream("");
       addActivity(`${emp.name} responded`, emp.icon);
+
+      // PATCH assistant message to backend with final reply
+      try {
+        await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageId: assistantMsgId, content: reply, streaming: false })
+        });
+      } catch (err) {
+        console.error("Error updating assistant message on backend:", err);
+      }
     } catch (e) {
       dispatch({ type: "UPDATE_EMP_LAST", empId: activeEmp, payload: { content: `⚠️ Error: ${e.message}`, streaming: false } });
+
+      // PATCH assistant message to backend with error
+      try {
+        await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageId: assistantMsgId, content: `⚠️ Error: ${e.message}`, streaming: false })
+        });
+      } catch (err) {}
     }
     setEmpLoading(false);
   }, [empInput, empLoading, empFile, activeEmp, state.empChats, state.company, state.memory, addActivity, runRealResearch, runRealAlgorithmEngineering, runRealDNAEngineering, runRealSimulationEngineering, runRealStorageArchitect]);
@@ -6803,7 +6862,14 @@ Empirical DNA Synthesis Profile to stress-test:
                     <div style={{ fontSize: "0.66rem", color: T.text3 }}>{emp.title}</div>
                   </div>
                   {(state.empChats[activeEmp] || []).length > 0 && (
-                    <button onClick={() => dispatch({ type: "CLEAR_EMP_CHAT", empId: activeEmp })} style={{ marginLeft: "auto", background: "none", border: `1px solid ${T.border2}`, borderRadius: 8, color: T.text3, padding: "5px 11px", fontSize: "0.7rem", cursor: "pointer" }}>Clear Chat</button>
+                    <button onClick={async () => {
+                      try {
+                        await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, { method: "DELETE" });
+                      } catch (e) {
+                        console.error("Error clearing chat on backend:", e);
+                      }
+                      dispatch({ type: "CLEAR_EMP_CHAT", empId: activeEmp });
+                    }} style={{ marginLeft: "auto", background: "none", border: `1px solid ${T.border2}`, borderRadius: 8, color: T.text3, padding: "5px 11px", fontSize: "0.7rem", cursor: "pointer" }}>Clear Chat</button>
                   )}
                 </div>
 

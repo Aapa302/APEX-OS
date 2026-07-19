@@ -32,6 +32,7 @@ const architectureRouter = require("./routes/architecture");
 const companyRouter = require("./routes/company");
 const tasksRouter = require("./routes/tasks");
 const simulationsRouter = require("./routes/simulations");
+const teamChatRouter = require("./routes/teamChat");
 const { resolveModel } = require("./services/GeminiModelResolver");
 
 const app = express();
@@ -94,6 +95,7 @@ app.use("/api/architecture", architectureRouter);
 app.use("/api/company", companyRouter);
 app.use("/tasks", tasksRouter);
 app.use("/simulations", simulationsRouter);
+app.use("/team-chat", teamChatRouter);
 
 // ── 404 ──────────────────────────────────────────────────────
 app.use(notFoundHandler);
