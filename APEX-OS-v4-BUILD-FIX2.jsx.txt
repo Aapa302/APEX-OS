@@ -700,7 +700,7 @@ const initialAppState = () => {
     lab: ls.lab || { projects: [], algorithms: [], dna: [], papers: [], experiments: [], patents: [], team: [] },
     builds: ls.builds || [],
     analytics: ls.analytics || { tasksByDay: [2,4,3,7,5,6,8], revenueByMonth: [0,0,0,0,0,0,0,0,0,0,0,0] },
-    proxyUrl: ls.proxyUrl || (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:8787" : DEFAULT_PROXY),
+    proxyUrl: ls.proxyUrl || (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname.includes("webcontainer") || window.location.hostname.includes("preview") || window.location.hostname.includes("stackblitz") || window.location.hostname.includes("github.dev")) ? "http://localhost:8787" : DEFAULT_PROXY),
   };
 };
 
@@ -1845,6 +1845,116 @@ const ResearchLabView = ({ S, T, EMPS, dispatch, addActivity, toast, callClaudeJ
   const [labStage, setLabStage] = useState("");
   const [selectedAlgo, setSelectedAlgo] = useState(null);
 
+  // Real DNA Simulation Persistent Backend State & Functions
+  const [simulations, setSimulations] = useState([]);
+  const [simLoading, setSimLoading] = useState(false);
+
+  const fetchSimulations = async () => {
+    try {
+      setSimLoading(true);
+      const res = await fetch(`${PROXY_BASE_URL}/simulations`);
+      if (res.ok) {
+        const data = await res.json();
+        setSimulations(data);
+      }
+    } catch (err) {
+      console.error("Error fetching simulations:", err);
+    } finally {
+      setSimLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "experiments") {
+      fetchSimulations();
+    }
+  }, [tab]);
+
+  const triggerNewSimulation = async () => {
+    try {
+      const res = await fetch(`${PROXY_BASE_URL}/simulations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "PCR Cycle Sim #" + Math.floor(Math.random() * 1000),
+          type: "PCR Amplification",
+          status: "queued",
+          progress: 0,
+          estimatedTime: "1m 15s"
+        })
+      });
+      if (res.ok) {
+        toast("New simulation triggered and queued!", "success");
+        fetchSimulations();
+      }
+    } catch (err) {
+      toast("Failed to trigger simulation", "error");
+    }
+  };
+
+  const cancelSimulation = async (id) => {
+    try {
+      const res = await fetch(`${PROXY_BASE_URL}/simulations/${id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        toast("Simulation removed/cancelled successfully", "info");
+        fetchSimulations();
+      }
+    } catch (err) {
+      toast("Failed to cancel simulation", "error");
+    }
+  };
+
+  const resetTelemetryQueue = async () => {
+    try {
+      for (const sim of simulations) {
+        await fetch(`${PROXY_BASE_URL}/simulations/${sim.id}`, { method: "DELETE" });
+      }
+      toast("Telemetry queue reset!", "success");
+      fetchSimulations();
+    } catch (err) {
+      toast("Error resetting queue", "error");
+    }
+  };
+
+  const runAllQueued = async () => {
+    const queuedSims = simulations.filter(s => s.status === "queued");
+    if (queuedSims.length === 0) {
+      toast("No queued simulations found.", "warning");
+      return;
+    }
+
+    toast("Processing all queued simulations...", "info");
+    for (const sim of queuedSims) {
+      try {
+        await fetch(`${PROXY_BASE_URL}/simulations/${sim.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "running", progress: 10, estimatedTime: "10s" })
+        });
+        await fetchSimulations();
+
+        for (let p = 25; p <= 100; p += 25) {
+          await new Promise(r => setTimeout(r, 400));
+          await fetch(`${PROXY_BASE_URL}/simulations/${sim.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              progress: p,
+              status: p === 100 ? "completed" : "running",
+              estimatedTime: p === 100 ? "Completed" : `${Math.max(1, (100 - p) / 10)}s`
+            })
+          });
+          await fetchSimulations();
+        }
+      } catch (err) {
+        console.error("Error running simulation:", err);
+      }
+    }
+    toast("All queued simulations processed successfully!", "success");
+  };
+
   // Real DNA Storage Engineering Hooks
   const [dnaStrat, setDnaStrat] = useState("base4");
   const [dnaProcessing, setDnaProcessing] = useState(false);
@@ -2868,14 +2978,97 @@ const ResearchLabView = ({ S, T, EMPS, dispatch, addActivity, toast, callClaudeJ
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* DNA Simulation Engine Dashboard */}
               <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
-                <h4 style={{ margin: "0 0 16px 0", color: T.text1 }}>Reproducibility Tracking</h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {["Env-Config: V100x8", "Random Seed: 0x42", "Data Hash: SHA-256...f3"].map(t => (
-                    <div key={t} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: "0.75rem", color: T.text2 }}>
-                      <span style={{ color: T.green }}>✓</span> {t}
+                <h3 style={{ margin: "0 0 20px 0", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: "1.2rem" }}>📈</span> DNA Simulation Engine
+                </h3>
+
+                {/* Telemetry Counter Row */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 20 }}>
+                  {[
+                    { label: "Total", count: simulations.length, color: T.text1 },
+                    { label: "Active", count: simulations.filter(s => s.status === "running").length, color: T.pink },
+                    { label: "Queued", count: simulations.filter(s => s.status === "queued").length, color: T.yellow },
+                    { label: "Completed", count: simulations.filter(s => s.status === "completed").length, color: T.green },
+                    { label: "Failed", count: simulations.filter(s => s.status === "failed" || s.status === "cancelled").length, color: T.red }
+                  ].map((stat, i) => (
+                    <div key={i} style={{ background: T.surf2, borderRadius: 10, padding: "10px 4px", textAlign: "center", border: `1px solid ${T.border2}` }}>
+                      <div style={{ fontSize: "0.62rem", color: T.text3, textTransform: "uppercase", letterSpacing: "0.3px", marginBottom: 4 }}>{stat.label}</div>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 800, color: stat.color }}>{stat.count}</div>
                     </div>
                   ))}
+                </div>
+
+                {/* Controls */}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+                  <button
+                    onClick={triggerNewSimulation}
+                    style={{ flex: 1, minWidth: "120px", padding: "10px 14px", background: `linear-gradient(135deg, ${T.accent}, ${T.accent2})`, border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
+                  >
+                    <span>➕</span> Trigger New Simulation
+                  </button>
+                  <button
+                    onClick={runAllQueued}
+                    disabled={simulations.filter(s => s.status === "queued").length === 0}
+                    style={{ flex: 1, minWidth: "100px", padding: "10px 14px", background: `${T.green}15`, border: `1px solid ${T.green}30`, borderRadius: 8, color: T.green, fontWeight: 700, fontSize: "0.78rem", cursor: simulations.filter(s => s.status === "queued").length === 0 ? "default" : "pointer", opacity: simulations.filter(s => s.status === "queued").length === 0 ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
+                  >
+                    <span>▶️</span> Run All Queued
+                  </button>
+                  <button
+                    onClick={resetTelemetryQueue}
+                    disabled={simulations.length === 0}
+                    style={{ padding: "10px 14px", background: `${T.red}10`, border: `1px solid ${T.red}30`, borderRadius: 8, color: T.red, fontWeight: 700, fontSize: "0.78rem", cursor: simulations.length === 0 ? "default" : "pointer", opacity: simulations.length === 0 ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    title="Reset Telemetry Queue"
+                  >
+                    Reset Telemetry Queue
+                  </button>
+                </div>
+
+                {/* Simulation Queue/List */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
+                  {simulations.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "40px 0", color: T.text3, fontSize: "0.78rem" }}>
+                      No simulations in queue. Click "Trigger New Simulation" to start.
+                    </div>
+                  ) : (
+                    simulations.map(sim => {
+                      const badgeColor =
+                        sim.status === "completed" ? T.green :
+                        sim.status === "running" ? T.pink :
+                        sim.status === "queued" ? T.yellow : T.red;
+                      return (
+                        <div key={sim.id} style={{ background: T.surf2, border: `1px solid ${T.border2}`, borderRadius: 12, padding: 14 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                            <div>
+                              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: T.text1 }}>{sim.name}</div>
+                              <div style={{ fontSize: "0.68rem", color: T.text3, marginTop: 2 }}>Type: {sim.type} · Est: {sim.estimatedTime}</div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: "0.62rem", fontWeight: "bold", background: `${badgeColor}15`, color: badgeColor, padding: "2px 8px", borderRadius: 4, textTransform: "uppercase" }}>
+                                {sim.status}
+                              </span>
+                              {(sim.status === "queued" || sim.status === "running") && (
+                                <button
+                                  onClick={() => cancelSimulation(sim.id)}
+                                  style={{ background: "none", border: "none", color: T.pink, cursor: "pointer", fontSize: "0.85rem", padding: 0 }}
+                                  title="Cancel Simulation"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ flex: 1, height: 6, background: `${T.border2}`, borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ width: `${sim.progress}%`, height: "100%", background: badgeColor, transition: "width 0.3s ease" }} />
+                            </div>
+                            <span style={{ fontSize: "0.68rem", fontWeight: "bold", color: badgeColor, width: 32, textAlign: "right" }}>{sim.progress}%</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -3461,6 +3654,18 @@ export default function ApexOS() {
         }
         setProxyDetails(msg);
         console.warn(`[Proxy Check] Unreachable at ${base}:`, e);
+
+        // Self-healing fallback: try http://localhost:8787 if default failed and we're not already on it
+        if (base !== "http://localhost:8787") {
+          try {
+            const fallbackRes = await fetch("http://localhost:8787/ping", { mode: 'cors', cache: 'no-cache' });
+            if (fallbackRes.ok) {
+              dispatch({ type: "SET_PROXY", payload: "http://localhost:8787" });
+            }
+          } catch (err) {
+            // local server not up either
+          }
+        }
       }
     };
     checkProxy();

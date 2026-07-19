@@ -1,0 +1,29 @@
+[
+  {
+    "id": "sim-1",
+    "name": "Thermal PCR Cycling Simulation",
+    "type": "PCR Amplification",
+    "status": "completed",
+    "progress": 100,
+    "estimatedTime": "Completed",
+    "createdAt": "2026-07-19T04:58:01.338Z"
+  },
+  {
+    "id": "sim-2",
+    "name": "Illumina NovaSeq Error Sweep",
+    "type": "Sequencing Profiler",
+    "status": "running",
+    "progress": 45,
+    "estimatedTime": "45s",
+    "createdAt": "2026-07-19T05:58:01.338Z"
+  },
+  {
+    "id": "sim-3",
+    "name": "Oxford Nanopore Indels Insertion",
+    "type": "Mutational Stress-test",
+    "status": "queued",
+    "progress": 0,
+    "estimatedTime": "2m 10s",
+    "createdAt": "2026-07-19T05:58:01.338Z"
+  }
+]

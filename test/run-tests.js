@@ -515,6 +515,81 @@ async function runTests() {
 
     console.log("✅ Passed: Tasks Express Routes integration\n");
 
+    // ── 13. Test Simulations Express Routes ────────────────────
+    console.log("Testing: Simulations Express Routes integration...");
+    const BASE_SIMULATIONS_URL = `http://localhost:${PORT}/simulations`;
+
+    // A. Read initial simulations
+    const initialSimsRes = await fetch(BASE_SIMULATIONS_URL);
+    assert.strictEqual(initialSimsRes.status, 200, "GET /simulations should return 200");
+    const initialSims = await initialSimsRes.json();
+    assert.ok(Array.isArray(initialSims), "GET /simulations should return an array");
+    const initialSimsLength = initialSims.length;
+
+    // B. Create a new simulation (POST /simulations)
+    console.log("  - POST /simulations (create simulation)");
+    const createSimRes = await fetch(BASE_SIMULATIONS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Monte Carlo Sequencing Pass",
+        type: "Sequencing Profiler",
+        status: "queued",
+        progress: 0,
+        estimatedTime: "2m 15s"
+      })
+    });
+    assert.strictEqual(createSimRes.status, 201, "POST /simulations should return 201 created");
+    const simData = await createSimRes.json();
+    assert.ok(simData.id, "Created simulation should have an ID");
+    assert.strictEqual(simData.name, "Test Monte Carlo Sequencing Pass");
+    assert.strictEqual(simData.type, "Sequencing Profiler");
+    assert.strictEqual(simData.status, "queued");
+    assert.strictEqual(simData.progress, 0);
+    assert.strictEqual(simData.estimatedTime, "2m 15s");
+
+    // C. Verify simulation list count increased
+    const updatedSimsRes = await fetch(BASE_SIMULATIONS_URL);
+    const updatedSims = await updatedSimsRes.json();
+    assert.strictEqual(updatedSims.length, initialSimsLength + 1, "Simulations list count should increase by 1");
+    const foundSim = updatedSims.find(s => s.id === simData.id);
+    assert.ok(foundSim, "The created simulation should be in the retrieved list");
+
+    // D. Update simulation progress/status (PATCH /simulations/:id)
+    console.log(`  - PATCH /simulations/${simData.id} (update progress)`);
+    const updateSimRes = await fetch(`${BASE_SIMULATIONS_URL}/${simData.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "running",
+        progress: 50,
+        estimatedTime: "1m"
+      })
+    });
+    assert.strictEqual(updateSimRes.status, 200, "PATCH /simulations/:id should return 200");
+    const updatedSimData = await updateSimRes.json();
+    assert.strictEqual(updatedSimData.status, "running", "Simulation status should update to 'running'");
+    assert.strictEqual(updatedSimData.progress, 50, "Simulation progress should update to 50");
+    assert.strictEqual(updatedSimData.estimatedTime, "1m", "Simulation estimatedTime should update");
+
+    // E. Delete simulation (DELETE /simulations/:id)
+    console.log(`  - DELETE /simulations/${simData.id} (delete simulation)`);
+    const deleteSimRes = await fetch(`${BASE_SIMULATIONS_URL}/${simData.id}`, {
+      method: "DELETE"
+    });
+    assert.strictEqual(deleteSimRes.status, 200, "DELETE /simulations/:id should return 200");
+    const deleteSimData = await deleteSimRes.json();
+    assert.strictEqual(deleteSimData.simulation.id, simData.id, "Returned deleted simulation should match the ID");
+
+    // F. Verify deletion
+    const finalSimsRes = await fetch(BASE_SIMULATIONS_URL);
+    const finalSims = await finalSimsRes.json();
+    assert.strictEqual(finalSims.length, initialSimsLength, "Simulations length should revert to initial size");
+    const deletedSimLookup = finalSims.find(s => s.id === simData.id);
+    assert.ok(!deletedSimLookup, "Deleted simulation should no longer exist in the list");
+
+    console.log("✅ Passed: Simulations Express Routes integration\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
