@@ -737,6 +737,93 @@ async function runTests() {
 
     console.log("✅ Passed: DNA Encoder V1 Express Routes integration\n");
 
+    // ── 17. Test DNA Synthesizer Express Route ─────────────────
+    console.log("Testing: DNA Synthesizer Express Route integration (POST /dna-synthesize)...");
+
+    // A. Valid short sequence synthesis
+    console.log("  - POST /dna-synthesize (short sequence ≤ 200bp)");
+    const synthShortRes = await fetch(`${BASE_V1_URL}/dna-synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sequence: "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT",
+        name: "test_short"
+      })
+    });
+    assert.strictEqual(synthShortRes.status, 200, "Should return 200");
+    assert.strictEqual(synthShortRes.headers.get("content-type").includes("text/plain"), true);
+    assert.strictEqual(synthShortRes.headers.get("content-disposition").includes('filename="test_short.fasta"'), true);
+    const synthShortText = await synthShortRes.text();
+
+    // Check comments
+    assert.strictEqual(synthShortText.includes("; APEX DNA Synthesizer Export"), true);
+    assert.strictEqual(synthShortText.includes("; Sequence Length: 64 bp"), true);
+    assert.strictEqual(synthShortText.includes("; GC Content: 50.00%"), true);
+    assert.strictEqual(synthShortText.includes("; Homopolymer Check: PASS"), true);
+    // Check header and sequence
+    assert.strictEqual(synthShortText.includes(">test_short"), true);
+    // Sequence is wrapped to 60 characters per line, so we replace whitespace to verify
+    const cleanSynthShortSeq = synthShortText.replace(/;[^\n]*\n/g, "").replace(/>[^\n]*\n/g, "").replace(/\s/g, "");
+    assert.strictEqual(cleanSynthShortSeq, "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT");
+
+    // B. Long sequence synthesis with automatic chunking (> 200bp) and wrapping
+    console.log("  - POST /dna-synthesize (long sequence > 200bp with chunking and wrapping)");
+    // Generate 250bp sequence with a homopolymer FAIL run
+    const longSeq = "A".repeat(10) + "C".repeat(120) + "G".repeat(120); // 250 bp
+    const synthLongRes = await fetch(`${BASE_V1_URL}/dna-synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dna: longSeq,
+        sequenceName: "test_long"
+      })
+    });
+    assert.strictEqual(synthLongRes.status, 200, "Should return 200");
+    const synthLongText = await synthLongRes.text();
+
+    // Check comments
+    assert.strictEqual(synthLongText.includes("; Sequence Length: 250 bp"), true);
+    assert.strictEqual(synthLongText.includes("; Homopolymer Check: FAIL"), true);
+    // Check chunking headers
+    assert.strictEqual(synthLongText.includes(">test_long_chunk_1"), true);
+    assert.strictEqual(synthLongText.includes(">test_long_chunk_2"), true);
+    // Check wrapping - search for 60 char lines
+    const lines = synthLongText.split("\n");
+    // Verify that DNA sequence lines do not exceed 60-70 characters (using 60)
+    for (const line of lines) {
+      if (line.trim() && !line.startsWith(";") && !line.startsWith(">")) {
+        assert.ok(line.length <= 60, `Sequence line length should be <= 60 characters but was ${line.length}`);
+      }
+    }
+
+    // C. Validation errors (invalid characters)
+    console.log("  - POST /dna-synthesize (invalid characters check)");
+    const synthInvalidRes = await fetch(`${BASE_V1_URL}/dna-synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sequence: "ACGTACTXCGT"
+      })
+    });
+    assert.strictEqual(synthInvalidRes.status, 400, "Should fail with 400");
+    const invalidErr = await synthInvalidRes.json();
+    assert.ok(invalidErr.error.includes("invalid characters"), "Should describe invalid characters");
+
+    // D. Validation errors (empty sequence)
+    console.log("  - POST /dna-synthesize (empty sequence check)");
+    const synthEmptyRes = await fetch(`${BASE_V1_URL}/dna-synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sequence: "   \n  "
+      })
+    });
+    assert.strictEqual(synthEmptyRes.status, 400, "Should fail with 400");
+    const emptyErr = await synthEmptyRes.json();
+    assert.ok(emptyErr.error.includes("cannot be empty"), "Should describe empty sequence error");
+
+    console.log("✅ Passed: DNA Synthesizer Express Route integration\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
