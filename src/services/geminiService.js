@@ -12,6 +12,181 @@
 const config = require("../config/env");
 const { getActiveModel, resolveModel } = require("./GeminiModelResolver");
 
+const CEO_TOOLS = [
+  {
+    functionDeclarations: [
+      {
+        name: "create_task",
+        description: "Creates a new task in the Task Board/To Do list.",
+        parameters: {
+          type: "object",
+          properties: {
+            title: { type: "string", description: "The title of the task (required)" },
+            description: { type: "string", description: "The description or details of the task" },
+            phase: { type: "string", description: "The phase/department of the task, e.g. Research, Algorithm, DNA Synthesis, Simulation, Architecture Recommendation, Product, etc. (required)" },
+            column: { type: "string", enum: ["todo", "inprogress", "review", "done"], description: "The column status of the task. Defaults to 'todo'" },
+            assignee: { type: "string", description: "The ID or name of the employee assigned" },
+            priority: { type: "string", enum: ["low", "medium", "high"], description: "The priority of the task. Defaults to 'medium'" }
+          },
+          required: ["title", "phase"]
+        }
+      },
+      {
+        name: "update_task",
+        description: "Updates an existing task in the Task Board (e.g. changing column/status, description, assignee, etc.).",
+        parameters: {
+          type: "object",
+          properties: {
+            id: { type: "string", description: "The ID of the task to update (required)" },
+            column: { type: "string", enum: ["todo", "inprogress", "review", "done"], description: "The new column status of the task" },
+            status: { type: "string", enum: ["todo", "inprogress", "review", "done"], description: "The new column status of the task (alias for column)" },
+            title: { type: "string", description: "The new title of the task" },
+            description: { type: "string", description: "The new description of the task" },
+            phase: { type: "string", description: "The new phase of the task" },
+            assignee: { type: "string", description: "The new assignee of the task" },
+            priority: { type: "string", enum: ["low", "medium", "high"], description: "The new priority of the task" }
+          },
+          required: ["id"]
+        }
+      },
+      {
+        name: "trigger_simulation",
+        description: "Triggers a new virtual DNA simulation run.",
+        parameters: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "The name of the simulation run" },
+            type: { type: "string", description: "The type of the simulation, e.g. PCR Amplification, Sequencing Profiler, Mutational Stress-test, etc." },
+            status: { type: "string", enum: ["queued", "running", "completed"], description: "The initial status of the simulation. Defaults to 'queued'" },
+            progress: { type: "integer", description: "The initial progress of the simulation. Defaults to 0" },
+            estimatedTime: { type: "string", description: "The estimated time of the simulation, e.g. '1m 15s'" }
+          }
+        }
+      },
+      {
+        name: "save_research_report",
+        description: "Saves a structured scientific research report persistently to the backend store.",
+        parameters: {
+          type: "object",
+          properties: {
+            report: {
+              type: "object",
+              properties: {
+                query: { type: "string", description: "The search query or target of the research (required)" },
+                executiveSummary: { type: "string", description: "A brief 2-3 sentence executive summary of findings (required)" },
+                confidenceScore: { type: "integer", description: "A confidence score from 0 to 100 based on evidence quality (required)" },
+                keyFindings: { type: "array", items: { type: "string" }, description: "Specific falsifiable findings as bullets" },
+                risks: { type: "array", items: { type: "string" }, description: "Identified risks or challenges" },
+                opportunities: { type: "array", items: { type: "string" }, description: "Identified opportunities for the company" },
+                recommendations: { type: "array", items: { type: "string" }, description: "Recommendations and next steps" },
+                sources: { type: "string", description: "Sources or citations referenced" }
+              },
+              required: ["query", "executiveSummary", "confidenceScore"]
+            }
+          },
+          required: ["report"]
+        }
+      },
+      {
+        name: "get_simulations",
+        description: "Retrieves the list of all currently active or saved simulations.",
+        parameters: {
+          type: "object",
+          properties: {}
+        }
+      },
+      {
+        name: "get_tasks",
+        description: "Retrieves the list of all currently active or saved tasks.",
+        parameters: {
+          type: "object",
+          properties: {}
+        }
+      }
+    ]
+  }
+];
+
+async function executeTool(name, args) {
+  console.info(`[GeminiToolExecutor] Executing tool via HTTP request: ${name} with args:`, args);
+  const baseUrl = `http://localhost:${config.port}`;
+  try {
+    if (name === "create_task") {
+      const res = await fetch(`${baseUrl}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(args)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { error: data.error || `HTTP error ${res.status}` };
+      }
+      return data;
+
+    } else if (name === "update_task") {
+      const { id, ...updateFields } = args;
+      if (!id) {
+        return { error: "Task ID is required for update_task." };
+      }
+      const res = await fetch(`${baseUrl}/tasks/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateFields)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { error: data.error || `HTTP error ${res.status}` };
+      }
+      return data;
+
+    } else if (name === "trigger_simulation") {
+      const res = await fetch(`${baseUrl}/simulations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(args)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { error: data.error || `HTTP error ${res.status}` };
+      }
+      return data;
+
+    } else if (name === "save_research_report") {
+      const res = await fetch(`${baseUrl}/research-reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(args)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { error: data.error || `HTTP error ${res.status}` };
+      }
+      return data;
+
+    } else if (name === "get_simulations") {
+      const res = await fetch(`${baseUrl}/simulations`);
+      const data = await res.json();
+      if (!res.ok) {
+        return { error: `HTTP error ${res.status}` };
+      }
+      return data;
+
+    } else if (name === "get_tasks") {
+      const res = await fetch(`${baseUrl}/tasks`);
+      const data = await res.json();
+      if (!res.ok) {
+        return { error: `HTTP error ${res.status}` };
+      }
+      return data;
+    }
+
+    return { error: `Unknown tool name: ${name}` };
+  } catch (err) {
+    console.error(`[GeminiToolExecutor] Error executing tool ${name} via HTTP:`, err);
+    return { error: err.message };
+  }
+}
+
 // Throttling and Queueing variables
 const apiCallTimestamps = [];
 const requestQueue = [];
@@ -181,54 +356,7 @@ async function generateContent(messages, system, opts = {}) {
   return result;
 }
 
-async function generateContentWithRetry(messages, system, opts = {}, isRetry = false, quotaRetryDone = false) {
-  const { jsonMode = false } = opts;
-  let maxTokens = opts.maxTokens || 1000;
-
-  // Enforce reasonable safety ceiling (cap at 10000 max)
-  if (maxTokens > 10000) {
-    maxTokens = 10000;
-  }
-
-  // Use strictly the dynamically active resolved model
-  const model = getActiveModel();
-
-  // Try both v1beta and v1 endpoints for this model
-  const urls = [
-    `${GEMINI_BASE_URL}/models/${model}:generateContent`,
-    `${GEMINI_FALLBACK_URL}/models/${model}:generateContent`
-  ];
-
-  const geminiContents = toGeminiContents(messages);
-
-  if (system && system.trim()) {
-    if (geminiContents.length > 0 && geminiContents[0].role === "user") {
-      const firstPart = geminiContents[0].parts[0];
-      if (firstPart && typeof firstPart.text === "string") {
-        firstPart.text = `${system}\n\n${firstPart.text}`;
-      } else {
-        geminiContents[0].parts.unshift({ text: system });
-      }
-    } else {
-      geminiContents.unshift({
-        role: "user",
-        parts: [{ text: system }]
-      });
-    }
-  }
-
-  const body = {
-    contents: geminiContents,
-    generationConfig: {
-      maxOutputTokens: maxTokens,
-      temperature: opts.temperature ?? 0.7,
-      topP: opts.top_p ?? 0.95,
-      ...(jsonMode ? { response_mime_type: "application/json" } : {})
-    }
-  };
-
-  console.info(`[GeminiRequest] model: ${model}, maxOutputTokens: ${maxTokens}, jsonMode: ${jsonMode}`);
-
+async function makeApiCallWithFallback(body, urls, model, isRetry, quotaRetryDone) {
   let lastError = null;
 
   for (const url of urls) {
@@ -276,7 +404,12 @@ async function generateContentWithRetry(messages, system, opts = {}, isRetry = f
         try {
           await resolveModel();
           console.info(`[GeminiService] Self-heal complete. Retrying request once with new model [${getActiveModel()}]...`);
-          return generateContentWithRetry(messages, system, opts, true);
+          const newModel = getActiveModel();
+          const newUrls = [
+            `${GEMINI_BASE_URL}/models/${newModel}:generateContent`,
+            `${GEMINI_FALLBACK_URL}/models/${newModel}:generateContent`
+          ];
+          return makeApiCallWithFallback(body, newUrls, newModel, true, quotaRetryDone);
         } catch (resolveErr) {
           console.error(`[GeminiService] Self-healing resolveModel failed:`, resolveErr.message);
         }
@@ -304,7 +437,7 @@ async function generateContentWithRetry(messages, system, opts = {}, isRetry = f
             console.warn(`[GeminiService] Retrying after quota error, waiting ${waitSec}s. Error details: ${errMsg}`);
             await new Promise((resolve) => setTimeout(resolve, waitSec * 1000));
             // Retry the request once with quotaRetryDone = true
-            return generateContentWithRetry(messages, system, opts, isRetry, true);
+            return makeApiCallWithFallback(body, urls, model, isRetry, true);
           }
 
           if (retryCount < maxRetries) {
@@ -327,11 +460,114 @@ async function generateContentWithRetry(messages, system, opts = {}, isRetry = f
       }
 
       console.info(`[GeminiService] Success with model [${model}]`);
-      return toAnthropicResponse(data, model);
+      return data;
     }
   }
 
   throw lastError || new Error(`Failed to reach Gemini for model [${model}] after trying multiple endpoints.`);
+}
+
+async function generateContentWithRetry(messages, system, opts = {}, isRetry = false, quotaRetryDone = false) {
+  const { jsonMode = false } = opts;
+  let maxTokens = opts.maxTokens || 1000;
+
+  // Enforce reasonable safety ceiling (cap at 10000 max)
+  if (maxTokens > 10000) {
+    maxTokens = 10000;
+  }
+
+  // Use strictly the dynamically active resolved model
+  const model = getActiveModel();
+
+  // Try both v1beta and v1 endpoints for this model
+  const urls = [
+    `${GEMINI_BASE_URL}/models/${model}:generateContent`,
+    `${GEMINI_FALLBACK_URL}/models/${model}:generateContent`
+  ];
+
+  const geminiContents = toGeminiContents(messages);
+
+  if (system && system.trim()) {
+    if (geminiContents.length > 0 && geminiContents[0].role === "user") {
+      const firstPart = geminiContents[0].parts[0];
+      if (firstPart && typeof firstPart.text === "string") {
+        firstPart.text = `${system}\n\n${firstPart.text}`;
+      } else {
+        geminiContents[0].parts.unshift({ text: system });
+      }
+    } else {
+      geminiContents.unshift({
+        role: "user",
+        parts: [{ text: system }]
+      });
+    }
+  }
+
+  const isCeo = system && (system.includes("You are APEX") || system.includes("AI CEO"));
+  let loopCount = 0;
+  const maxLoops = 5;
+
+  let currentContents = [...geminiContents];
+
+  while (loopCount < maxLoops) {
+    const body = {
+      contents: currentContents,
+      generationConfig: {
+        maxOutputTokens: maxTokens,
+        temperature: opts.temperature ?? 0.7,
+        topP: opts.top_p ?? 0.95,
+        ...(jsonMode && !isCeo ? { response_mime_type: "application/json" } : {})
+      }
+    };
+
+    if (isCeo) {
+      body.tools = CEO_TOOLS;
+    }
+
+    console.info(`[GeminiRequest] model: ${model}, maxOutputTokens: ${maxTokens}, jsonMode: ${jsonMode}, isCeo: ${isCeo}, loopCount: ${loopCount}`);
+
+    const data = await makeApiCallWithFallback(body, urls, model, isRetry, quotaRetryDone);
+
+    // Native function calling interceptor and execution loop
+    const candidate = data?.candidates?.[0];
+    const parts = candidate?.content?.parts || [];
+    const functionCalls = parts.filter(p => p.functionCall);
+
+    if (functionCalls.length > 0) {
+      console.info(`[GeminiService] Model requested ${functionCalls.length} function call(s).`);
+      const functionResponseParts = [];
+      for (const fc of functionCalls) {
+        const result = await executeTool(fc.functionCall.name, fc.functionCall.args);
+        functionResponseParts.push({
+          functionResponse: {
+            name: fc.functionCall.name,
+            id: fc.functionCall.id || fc.functionCall.name,
+            response: { result }
+          }
+        });
+      }
+
+      // Record the function call in model's turn
+      currentContents.push({
+        role: "model",
+        parts: parts
+      });
+
+      // Record the execution results in user's turn
+      currentContents.push({
+        role: "user",
+        parts: functionResponseParts
+      });
+
+      loopCount++;
+      console.info(`[GeminiService] Continuing conversation turn ${loopCount}/${maxLoops}.`);
+      continue;
+    }
+
+    return toAnthropicResponse(data, model);
+  }
+
+  throw new Error(`Exceeded maximum tool execution loop depth of ${maxLoops}`);
 }
 
 /**
@@ -350,4 +586,4 @@ async function listModels() {
   }
 }
 
-module.exports = { generateContent, listModels, GeminiError, toGeminiContents, toAnthropicResponse };
+module.exports = { generateContent, listModels, GeminiError, toGeminiContents, toAnthropicResponse, executeTool };
