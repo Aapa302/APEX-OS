@@ -1868,7 +1868,7 @@ const ResearchLabView = ({ S, T, EMPS, dispatch, addActivity, toast, callClaudeJ
     if (tab === "experiments") {
       fetchSimulations();
     }
-  }, [tab]);
+  }, [tab, S.proxyUrl]);
 
   const triggerNewSimulation = async () => {
     try {
@@ -3632,6 +3632,18 @@ export default function ApexOS() {
       const base = PROXY_BASE_URL.replace(/\/+$/, '');
       const start = Date.now();
       try {
+        // Proactive check: If we are not currently using http://localhost:8787,
+        // check if local server is alive first! If so, migrate automatically.
+        if (base !== "http://localhost:8787") {
+          try {
+            const localPing = await fetch("http://localhost:8787/ping", { mode: 'cors', cache: 'no-cache' });
+            if (localPing.ok) {
+              dispatch({ type: "SET_PROXY", payload: "http://localhost:8787" });
+              return; // re-run checkProxy with updated PROXY_BASE_URL
+            }
+          } catch (localErr) {}
+        }
+
         // Try /ping first as it's the simplest
         const pRes = await fetch(`${base}/ping`, { mode: 'cors', cache: 'no-cache' });
         if (!pRes.ok) throw new Error(`Ping failed: ${pRes.status} ${pRes.statusText}`);
