@@ -503,7 +503,12 @@ async function generateContentWithRetry(messages, system, opts = {}, isRetry = f
     }
   }
 
-  const isCeo = system && (system.includes("You are APEX") || system.includes("AI CEO"));
+  const isCeo = system && (
+    system.includes("You are APEX") ||
+    system.includes("AI CEO") ||
+    system.toLowerCase().includes("apex") ||
+    system.toLowerCase().includes("ceo")
+  );
   let loopCount = 0;
   const maxLoops = 5;
 

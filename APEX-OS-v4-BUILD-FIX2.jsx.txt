@@ -4008,7 +4008,7 @@ export default function ApexOS() {
     // BUILD MODE Classification Rule
     let isBuildRequest = false;
     if (!isRealCommand) {
-      if (
+      const hasBuildKeyword =
         normalizedText.includes("create") ||
         normalizedText.includes("build") ||
         normalizedText.includes("improve") ||
@@ -4017,8 +4017,17 @@ export default function ApexOS() {
         normalizedText.includes("generate") ||
         normalizedText.includes("develop") ||
         normalizedText.includes("code") ||
-        normalizedText.includes("ship")
-      ) {
+        normalizedText.includes("ship");
+
+      const isTaskOrSimulation =
+        normalizedText.includes("task") ||
+        normalizedText.includes("tasks") ||
+        normalizedText.includes("simulation") ||
+        normalizedText.includes("simulations") ||
+        normalizedText.includes("report") ||
+        normalizedText.includes("reports");
+
+      if (hasBuildKeyword && !isTaskOrSimulation) {
         isBuildRequest = true;
       }
     }
