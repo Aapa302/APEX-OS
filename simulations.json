@@ -25,5 +25,14 @@
     "progress": 0,
     "estimatedTime": "2m 10s",
     "createdAt": "2026-07-19T05:58:01.338Z"
+  },
+  {
+    "id": "sim_1784442067060_sra8",
+    "name": "Manual Test Sim",
+    "type": "PCR",
+    "status": "queued",
+    "progress": 0,
+    "estimatedTime": "1m",
+    "createdAt": "2026-07-19T06:21:07.060Z"
   }
 ]
