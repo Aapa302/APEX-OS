@@ -74,7 +74,7 @@ router.post("/", async (req, res, next) => {
       const expectedChecksum = sim.checksum || "";
       const currentHash = sha256(currentSequence);
 
-      if (currentHash === expectedChecksum) {
+      if (expectedChecksum && currentHash === expectedChecksum) {
         details.push({
           id: sim.id,
           name: sim.name,
@@ -82,6 +82,18 @@ router.post("/", async (req, res, next) => {
         });
       } else {
         corrupted_found++;
+
+        // If no expected checksum exists, it's unfixable (legacy format)
+        if (!expectedChecksum) {
+          details.push({
+            id: sim.id,
+            corrupted_id: sim.id,
+            name: sim.name,
+            status: "corrupted_unfixable",
+            reason: "unable to fix - legacy format"
+          });
+          continue;
+        }
 
         // Error-correction: triplication / majority-vote
         const triplicates = sim.triplicates;
@@ -130,17 +142,19 @@ router.post("/", async (req, res, next) => {
           } else {
             details.push({
               id: sim.id,
+              corrupted_id: sim.id,
               name: sim.name,
               status: "corrupted_unfixable",
-              reason: "Majority-voted sequence hash mismatch"
+              reason: "unable to fix - majority-voted sequence hash mismatch"
             });
           }
         } else {
           details.push({
             id: sim.id,
+            corrupted_id: sim.id,
             name: sim.name,
             status: "corrupted_unfixable",
-            reason: "No valid triplicates found for majority voting"
+            reason: "unable to fix - legacy format"
           });
         }
       }

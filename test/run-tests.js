@@ -632,6 +632,67 @@ async function runTests() {
       await fs.writeFile(simulationsFilePath, validSimulationsBackup);
     }
 
+    // E. Test legacy/unfixable format handling in health check
+    console.log("  - POST /dna-health-check (unfixable/legacy format handling)");
+    try {
+      const legacyMockData = [
+        {
+          id: "sim_legacy_1",
+          name: "BRCA1 Legacy Missing Checksum",
+          sequence: "ACGTACGTACGTACGT"
+          // Missing checksum and triplicates
+        },
+        {
+          id: "sim_legacy_2",
+          name: "BRCA1 Legacy Missing Triplicates",
+          sequence: "ACGTACGTACGGACGT",
+          checksum: "cf573e65038d08ff910a3345642ffd1e8329844633c2dcb15964b324ebdba4d0"
+          // Missing triplicates
+        },
+        {
+          id: "sim_legacy_3",
+          name: "BRCA1 Unfixable Majority Mismatch",
+          sequence: "ACGTACGTACGGACGT",
+          checksum: "cf573e65038d08ff910a3345642ffd1e8329844633c2dcb15964b324ebdba4d0",
+          triplicates: [
+            "ACGTACGTACGGACGT",
+            "ACGTACGTACGGACGT",
+            "ACGTACGTACGGACGT" // Majority vote is incorrect, won't match checksum
+          ]
+        }
+      ];
+
+      await fs.writeFile(simulationsFilePath, JSON.stringify(legacyMockData, null, 2));
+
+      const legacyRes = await fetch(BASE_HEALTH_CHECK_URL, { method: "POST" });
+      assert.strictEqual(legacyRes.status, 200, "POST /dna-health-check should return 200 even with unfixable records");
+      const legacyData = await legacyRes.json();
+
+      assert.strictEqual(legacyData.scanned_count, 3);
+      assert.strictEqual(legacyData.corrupted_found, 3);
+      assert.strictEqual(legacyData.fixed_count, 0);
+
+      const r1 = legacyData.details.find(d => d.id === "sim_legacy_1");
+      assert.strictEqual(r1.status, "corrupted_unfixable");
+      assert.strictEqual(r1.corrupted_id, "sim_legacy_1");
+      assert.strictEqual(r1.reason, "unable to fix - legacy format");
+
+      const r2 = legacyData.details.find(d => d.id === "sim_legacy_2");
+      assert.strictEqual(r2.status, "corrupted_unfixable");
+      assert.strictEqual(r2.corrupted_id, "sim_legacy_2");
+      assert.strictEqual(r2.reason, "unable to fix - legacy format");
+
+      const r3 = legacyData.details.find(d => d.id === "sim_legacy_3");
+      assert.strictEqual(r3.status, "corrupted_unfixable");
+      assert.strictEqual(r3.corrupted_id, "sim_legacy_3");
+      assert.strictEqual(r3.reason, "unable to fix - majority-voted sequence hash mismatch");
+
+      console.log("    ✓ Successfully verified unfixable reasons and corrupted_id responses");
+    } finally {
+      // Restore valid backup
+      await fs.writeFile(simulationsFilePath, validSimulationsBackup);
+    }
+
     console.log("✅ Passed: DNA Health Check Express Routes integration\n");
 
     console.log("🎉 All tests passed!");
