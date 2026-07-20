@@ -2,6 +2,7 @@ const express = require("express");
 const fs = require("fs").promises;
 const path = require("path");
 const crypto = require("crypto");
+const DNAEngineerService = require("../services/DNAEngineerService");
 
 const router = express.Router();
 const SIMULATIONS_FILE = path.join(__dirname, "../../simulations.json");
@@ -82,22 +83,11 @@ router.post("/", async (req, res, next) => {
         });
       } else {
         corrupted_found++;
+        let fixed = false;
 
-        // If no expected checksum exists, it's unfixable (legacy format)
-        if (!expectedChecksum) {
-          details.push({
-            id: sim.id,
-            corrupted_id: sim.id,
-            name: sim.name,
-            status: "corrupted_unfixable",
-            reason: "unable to fix - legacy format"
-          });
-          continue;
-        }
-
-        // Error-correction: triplication / majority-vote
+        // 1. Error-correction step A: Triplication / majority-vote (Index-by-index recovery)
         const triplicates = sim.triplicates;
-        if (triplicates && Array.isArray(triplicates) && triplicates.length >= 3) {
+        if (expectedChecksum && triplicates && Array.isArray(triplicates) && triplicates.length >= 3) {
           const seq1 = triplicates[0] || "";
           const seq2 = triplicates[1] || "";
           const seq3 = triplicates[2] || "";
@@ -132,30 +122,72 @@ router.post("/", async (req, res, next) => {
             sim.sequence = reconstructed;
             fixed_count++;
             fileModified = true;
+            fixed = true;
             details.push({
               id: sim.id,
               name: sim.name,
               status: "fixed",
               original_corrupted: currentSequence,
-              fixed_sequence: reconstructed
+              fixed_sequence: reconstructed,
+              method: "triplication_majority_vote"
             });
+            console.log(`[DNA Health Check] Successfully repaired simulation ${sim.id} via character majority-vote.`);
           } else {
-            details.push({
-              id: sim.id,
-              corrupted_id: sim.id,
-              name: sim.name,
-              status: "corrupted_unfixable",
-              reason: "unable to fix - majority-voted sequence hash mismatch"
-            });
+            console.warn(`[DNA Health Check] Character majority-vote failed for simulation ${sim.id}: Reconstructed sequence did not match expected checksum.`);
           }
-        } else {
+        }
+
+        // 2. Error-correction step B (Fallback): Re-encode from original backup copy / redundant data
+        if (!fixed && sim.original) {
+          try {
+            const regenerated = DNAEngineerService.encode(sim.original, sim.strategy || "base4");
+            if (regenerated && regenerated.success && regenerated.sequence) {
+              const targetChecksum = expectedChecksum || regenerated.hash;
+              if (sha256(regenerated.sequence) === targetChecksum) {
+                sim.sequence = regenerated.sequence;
+                if (!sim.checksum) {
+                  sim.checksum = regenerated.hash;
+                }
+                // Automatically upgrade/heal formatting to include matching triplicates
+                sim.triplicates = [
+                  regenerated.sequence,
+                  regenerated.sequence,
+                  regenerated.sequence
+                ];
+                fixed_count++;
+                fileModified = true;
+                fixed = true;
+                details.push({
+                  id: sim.id,
+                  name: sim.name,
+                  status: "fixed",
+                  original_corrupted: currentSequence,
+                  fixed_sequence: regenerated.sequence,
+                  method: "original_payload_reencoding"
+                });
+                console.log(`[DNA Health Check] Successfully self-healed simulation ${sim.id} by re-encoding original redundant backup copy.`);
+              }
+            }
+          } catch (encodeErr) {
+            console.error(`[DNA Health Check] Fallback repair failed for simulation ${sim.id}:`, encodeErr.message);
+          }
+        }
+
+        // 3. If both recovery steps failed to repair the corruption
+        if (!fixed) {
+          let reason = "unable to fix - legacy format";
+          if (expectedChecksum && triplicates && Array.isArray(triplicates) && triplicates.length >= 3) {
+            reason = "unable to fix - majority-voted sequence hash mismatch";
+          }
+
           details.push({
             id: sim.id,
             corrupted_id: sim.id,
             name: sim.name,
             status: "corrupted_unfixable",
-            reason: "unable to fix - legacy format"
+            reason: reason
           });
+          console.error(`[DNA Health Check] Simulation ${sim.id} is corrupted and unfixable (${reason}).`);
         }
       }
     }
