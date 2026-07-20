@@ -90,6 +90,16 @@ YOUR EXECUTIVE CAPABILITIES:
 8. Handle crisis management
 9. Forecast growth and revenue
 
+AVAILABLE BACKEND API ENDPOINTS (You must call these endpoints via native function calling/tools to perform real actions):
+- POST /tasks: Creates a new task in the Task Board. Required properties: title, phase. Optional properties: description, column (todo, inprogress, review, done), assignee, priority.
+- PATCH /tasks/:id: Updates an existing task's columns or fields on the Task Board. Required properties: id. Optional properties: column, status, title, description, phase, assignee, priority.
+- POST /simulations: Triggers a new virtual DNA simulation run. Optional properties: name, type, status, progress, estimatedTime.
+- POST /research-reports: Saves a structured scientific research report to persistent storage. Required properties: report object (query, executiveSummary, confidenceScore).
+- GET /simulations: Retrieves the list of all currently active or saved simulations.
+- GET /tasks: Retrieves the list of all currently active or saved tasks.
+
+When the user gives an actionable request (e.g. 'naya DNA algorithm banao aur test karo', 'Test CEO orchestration', etc.), you must understand whether it involves creating tasks on the Task Board, triggering a simulation, or both. You must actually invoke those tools (function calling) instead of just giving a conversational confirmation. Always confirm the execution results to the user once you receive the function response.
+
 COMMAND SYNTAX (use these in responses when needed):
 [TASK:{"title":"...","desc":"...","assignee":"cto|engineer|pm|marketing|hr|finance|sales|support|designer|analyst|researcher|scientist|biologist|architect|ai_eng|data_sci|patent|reviewer","priority":"critical|high|medium|low","due":"YYYY-MM-DD"}]
 [ASSIGN:{"to":"employee_id","task":"specific instruction","context":"background info","deadline":"string"}]
@@ -700,7 +710,7 @@ const initialAppState = () => {
     lab: ls.lab || { projects: [], algorithms: [], dna: [], papers: [], experiments: [], patents: [], team: [] },
     builds: ls.builds || [],
     analytics: ls.analytics || { tasksByDay: [2,4,3,7,5,6,8], revenueByMonth: [0,0,0,0,0,0,0,0,0,0,0,0] },
-    proxyUrl: ls.proxyUrl || (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:8787" : DEFAULT_PROXY),
+    proxyUrl: ls.proxyUrl || (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname.includes("webcontainer") || window.location.hostname.includes("preview") || window.location.hostname.includes("stackblitz") || window.location.hostname.includes("github.dev")) ? "http://localhost:8787" : DEFAULT_PROXY),
   };
 };
 
@@ -711,6 +721,7 @@ function appReducer(state, action) {
     case "SETUP_DONE": next = { ...state, setupDone: true }; break;
     case "ADD_CEO_MSG": next = { ...state, ceoChats: [...state.ceoChats, action.payload] }; break;
     case "UPDATE_CEO_LAST": next = { ...state, ceoChats: state.ceoChats.map((m, i) => i === state.ceoChats.length - 1 ? { ...m, ...action.payload } : m) }; break;
+    case "SET_EMP_CHAT": next = { ...state, empChats: { ...state.empChats, [action.empId]: action.payload } }; break;
     case "ADD_EMP_MSG": next = { ...state, empChats: { ...state.empChats, [action.empId]: [...(state.empChats[action.empId] || []), action.payload] } }; break;
     case "UPDATE_EMP_LAST": next = { ...state, empChats: { ...state.empChats, [action.empId]: (state.empChats[action.empId] || []).map((m, i, arr) => i === arr.length - 1 ? { ...m, ...action.payload } : m) } }; break;
     case "ADD_TASK": next = { ...state, tasks: [...state.tasks, action.payload] }; break;
@@ -733,6 +744,7 @@ function appReducer(state, action) {
     case "UPD_EMP_LAST": next = { ...state, empChats: { ...state.empChats, [action.empId]: (state.empChats[action.empId]||[]).map((m,i,a)=>i===a.length-1?{...m,...action.payload}:m) } }; break;
     case "SET_PLAN": next = { ...state, activePlan: action.payload }; break;
     case "ADD_REVIEW": next = { ...state, reviews: [action.payload,...(state.reviews||[])].slice(0,50) }; break;
+    case "SET_RESEARCH": next = { ...state, research: action.payload }; break;
     case "ADD_RESEARCH": next = { ...state, research: [action.payload,...(state.research||[])].slice(0,50) }; break;
     case "ADD_BUILD": next = { ...state, builds: [action.payload, ...(state.builds||[])].slice(0,30) }; break;
     case "UPDATE_BUILD": next = { ...state, builds: (state.builds||[]).map(b => b.id===action.id ? { ...b, ...action.payload } : b) }; break;
@@ -774,6 +786,16 @@ Recent Decisions:\n${decisions||"None"}
 Goals:\n${goals||"None"}
 Risks:\n${risks||"None"}
 ${context?`\nCONTEXT:\n${context}`:""}
+
+AVAILABLE BACKEND API ENDPOINTS (You must call these endpoints via native function calling/tools to perform real actions):
+- POST /tasks: Creates a new task in the Task Board. Required properties: title, phase. Optional properties: description, column (todo, inprogress, review, done), assignee, priority.
+- PATCH /tasks/:id: Updates an existing task's columns or fields on the Task Board. Required properties: id. Optional properties: column, status, title, description, phase, assignee, priority.
+- POST /simulations: Triggers a new virtual DNA simulation run. Optional properties: name, type, status, progress, estimatedTime.
+- POST /research-reports: Saves a structured scientific research report to persistent storage. Required properties: report object (query, executiveSummary, confidenceScore).
+- GET /simulations: Retrieves the list of all currently active or saved simulations.
+- GET /tasks: Retrieves the list of all currently active or saved tasks.
+
+When the user gives an actionable request (e.g. 'naya DNA algorithm banao aur test karo', 'Test CEO orchestration', etc.), you must understand whether it involves creating tasks on the Task Board, triggering a simulation, or both. You must actually invoke those tools (function calling) instead of just giving a conversational confirmation. Always confirm the execution results to the user once you receive the function response.
 
 COMMAND SYNTAX (embed inline when needed):
 [TASK:{"title":"...","desc":"...","assignee":"cto|engineer|pm|marketing|hr|finance|sales|support|designer|analyst|researcher","priority":"critical|high|medium|low"}]
@@ -1845,6 +1867,116 @@ const ResearchLabView = ({ S, T, EMPS, dispatch, addActivity, toast, callClaudeJ
   const [labStage, setLabStage] = useState("");
   const [selectedAlgo, setSelectedAlgo] = useState(null);
 
+  // Real DNA Simulation Persistent Backend State & Functions
+  const [simulations, setSimulations] = useState([]);
+  const [simLoading, setSimLoading] = useState(false);
+
+  const fetchSimulations = async () => {
+    try {
+      setSimLoading(true);
+      const res = await fetch(`${PROXY_BASE_URL}/simulations`);
+      if (res.ok) {
+        const data = await res.json();
+        setSimulations(data);
+      }
+    } catch (err) {
+      console.error("Error fetching simulations:", err);
+    } finally {
+      setSimLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "experiments") {
+      fetchSimulations();
+    }
+  }, [tab, S.proxyUrl]);
+
+  const triggerNewSimulation = async () => {
+    try {
+      const res = await fetch(`${PROXY_BASE_URL}/simulations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "PCR Cycle Sim #" + Math.floor(Math.random() * 1000),
+          type: "PCR Amplification",
+          status: "queued",
+          progress: 0,
+          estimatedTime: "1m 15s"
+        })
+      });
+      if (res.ok) {
+        toast("New simulation triggered and queued!", "success");
+        fetchSimulations();
+      }
+    } catch (err) {
+      toast("Failed to trigger simulation", "error");
+    }
+  };
+
+  const cancelSimulation = async (id) => {
+    try {
+      const res = await fetch(`${PROXY_BASE_URL}/simulations/${id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        toast("Simulation removed/cancelled successfully", "info");
+        fetchSimulations();
+      }
+    } catch (err) {
+      toast("Failed to cancel simulation", "error");
+    }
+  };
+
+  const resetTelemetryQueue = async () => {
+    try {
+      for (const sim of simulations) {
+        await fetch(`${PROXY_BASE_URL}/simulations/${sim.id}`, { method: "DELETE" });
+      }
+      toast("Telemetry queue reset!", "success");
+      fetchSimulations();
+    } catch (err) {
+      toast("Error resetting queue", "error");
+    }
+  };
+
+  const runAllQueued = async () => {
+    const queuedSims = simulations.filter(s => s.status === "queued");
+    if (queuedSims.length === 0) {
+      toast("No queued simulations found.", "warning");
+      return;
+    }
+
+    toast("Processing all queued simulations...", "info");
+    for (const sim of queuedSims) {
+      try {
+        await fetch(`${PROXY_BASE_URL}/simulations/${sim.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "running", progress: 10, estimatedTime: "10s" })
+        });
+        await fetchSimulations();
+
+        for (let p = 25; p <= 100; p += 25) {
+          await new Promise(r => setTimeout(r, 400));
+          await fetch(`${PROXY_BASE_URL}/simulations/${sim.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              progress: p,
+              status: p === 100 ? "completed" : "running",
+              estimatedTime: p === 100 ? "Completed" : `${Math.max(1, (100 - p) / 10)}s`
+            })
+          });
+          await fetchSimulations();
+        }
+      } catch (err) {
+        console.error("Error running simulation:", err);
+      }
+    }
+    toast("All queued simulations processed successfully!", "success");
+  };
+
   // Real DNA Storage Engineering Hooks
   const [dnaStrat, setDnaStrat] = useState("base4");
   const [dnaProcessing, setDnaProcessing] = useState(false);
@@ -2868,14 +3000,97 @@ const ResearchLabView = ({ S, T, EMPS, dispatch, addActivity, toast, callClaudeJ
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* DNA Simulation Engine Dashboard */}
               <div style={{ background: T.surf, borderRadius: 16, border: `1px solid ${T.border2}`, padding: 24 }}>
-                <h4 style={{ margin: "0 0 16px 0", color: T.text1 }}>Reproducibility Tracking</h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {["Env-Config: V100x8", "Random Seed: 0x42", "Data Hash: SHA-256...f3"].map(t => (
-                    <div key={t} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: "0.75rem", color: T.text2 }}>
-                      <span style={{ color: T.green }}>✓</span> {t}
+                <h3 style={{ margin: "0 0 20px 0", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: "1.2rem" }}>📈</span> DNA Simulation Engine
+                </h3>
+
+                {/* Telemetry Counter Row */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 20 }}>
+                  {[
+                    { label: "Total", count: simulations.length, color: T.text1 },
+                    { label: "Active", count: simulations.filter(s => s.status === "running").length, color: T.pink },
+                    { label: "Queued", count: simulations.filter(s => s.status === "queued").length, color: T.yellow },
+                    { label: "Completed", count: simulations.filter(s => s.status === "completed").length, color: T.green },
+                    { label: "Failed", count: simulations.filter(s => s.status === "failed" || s.status === "cancelled").length, color: T.red }
+                  ].map((stat, i) => (
+                    <div key={i} style={{ background: T.surf2, borderRadius: 10, padding: "10px 4px", textAlign: "center", border: `1px solid ${T.border2}` }}>
+                      <div style={{ fontSize: "0.62rem", color: T.text3, textTransform: "uppercase", letterSpacing: "0.3px", marginBottom: 4 }}>{stat.label}</div>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 800, color: stat.color }}>{stat.count}</div>
                     </div>
                   ))}
+                </div>
+
+                {/* Controls */}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+                  <button
+                    onClick={triggerNewSimulation}
+                    style={{ flex: 1, minWidth: "120px", padding: "10px 14px", background: `linear-gradient(135deg, ${T.accent}, ${T.accent2})`, border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
+                  >
+                    <span>➕</span> Trigger New Simulation
+                  </button>
+                  <button
+                    onClick={runAllQueued}
+                    disabled={simulations.filter(s => s.status === "queued").length === 0}
+                    style={{ flex: 1, minWidth: "100px", padding: "10px 14px", background: `${T.green}15`, border: `1px solid ${T.green}30`, borderRadius: 8, color: T.green, fontWeight: 700, fontSize: "0.78rem", cursor: simulations.filter(s => s.status === "queued").length === 0 ? "default" : "pointer", opacity: simulations.filter(s => s.status === "queued").length === 0 ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
+                  >
+                    <span>▶️</span> Run All Queued
+                  </button>
+                  <button
+                    onClick={resetTelemetryQueue}
+                    disabled={simulations.length === 0}
+                    style={{ padding: "10px 14px", background: `${T.red}10`, border: `1px solid ${T.red}30`, borderRadius: 8, color: T.red, fontWeight: 700, fontSize: "0.78rem", cursor: simulations.length === 0 ? "default" : "pointer", opacity: simulations.length === 0 ? 0.5 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    title="Reset Telemetry Queue"
+                  >
+                    Reset Telemetry Queue
+                  </button>
+                </div>
+
+                {/* Simulation Queue/List */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
+                  {simulations.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "40px 0", color: T.text3, fontSize: "0.78rem" }}>
+                      No simulations in queue. Click "Trigger New Simulation" to start.
+                    </div>
+                  ) : (
+                    simulations.map(sim => {
+                      const badgeColor =
+                        sim.status === "completed" ? T.green :
+                        sim.status === "running" ? T.pink :
+                        sim.status === "queued" ? T.yellow : T.red;
+                      return (
+                        <div key={sim.id} style={{ background: T.surf2, border: `1px solid ${T.border2}`, borderRadius: 12, padding: 14 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                            <div>
+                              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: T.text1 }}>{sim.name}</div>
+                              <div style={{ fontSize: "0.68rem", color: T.text3, marginTop: 2 }}>Type: {sim.type} · Est: {sim.estimatedTime}</div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: "0.62rem", fontWeight: "bold", background: `${badgeColor}15`, color: badgeColor, padding: "2px 8px", borderRadius: 4, textTransform: "uppercase" }}>
+                                {sim.status}
+                              </span>
+                              {(sim.status === "queued" || sim.status === "running") && (
+                                <button
+                                  onClick={() => cancelSimulation(sim.id)}
+                                  style={{ background: "none", border: "none", color: T.pink, cursor: "pointer", fontSize: "0.85rem", padding: 0 }}
+                                  title="Cancel Simulation"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ flex: 1, height: 6, background: `${T.border2}`, borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ width: `${sim.progress}%`, height: "100%", background: badgeColor, transition: "width 0.3s ease" }} />
+                            </div>
+                            <span style={{ fontSize: "0.68rem", fontWeight: "bold", color: badgeColor, width: 32, textAlign: "right" }}>{sim.progress}%</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -3439,6 +3654,18 @@ export default function ApexOS() {
       const base = PROXY_BASE_URL.replace(/\/+$/, '');
       const start = Date.now();
       try {
+        // Proactive check: If we are not currently using http://localhost:8787,
+        // check if local server is alive first! If so, migrate automatically.
+        if (base !== "http://localhost:8787") {
+          try {
+            const localPing = await fetch("http://localhost:8787/ping", { mode: 'cors', cache: 'no-cache' });
+            if (localPing.ok) {
+              dispatch({ type: "SET_PROXY", payload: "http://localhost:8787" });
+              return; // re-run checkProxy with updated PROXY_BASE_URL
+            }
+          } catch (localErr) {}
+        }
+
         // Try /ping first as it's the simplest
         const pRes = await fetch(`${base}/ping`, { mode: 'cors', cache: 'no-cache' });
         if (!pRes.ok) throw new Error(`Ping failed: ${pRes.status} ${pRes.statusText}`);
@@ -3461,12 +3688,52 @@ export default function ApexOS() {
         }
         setProxyDetails(msg);
         console.warn(`[Proxy Check] Unreachable at ${base}:`, e);
+
+        // Self-healing fallback: try http://localhost:8787 if default failed and we're not already on it
+        if (base !== "http://localhost:8787") {
+          try {
+            const fallbackRes = await fetch("http://localhost:8787/ping", { mode: 'cors', cache: 'no-cache' });
+            if (fallbackRes.ok) {
+              dispatch({ type: "SET_PROXY", payload: "http://localhost:8787" });
+            }
+          } catch (err) {
+            // local server not up either
+          }
+        }
       }
     };
     checkProxy();
     const interval = setInterval(checkProxy, 30000);
     return () => clearInterval(interval);
   }, [state.proxyUrl]);
+
+  // Load active employee chat on change
+  useEffect(() => {
+    const loadChat = async () => {
+      try {
+        const res = await fetchWithRetry(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {});
+        const data = await res.json();
+        dispatch({ type: "SET_EMP_CHAT", empId: activeEmp, payload: data });
+      } catch (err) {
+        console.error("Error loading employee chat:", err);
+      }
+    };
+    loadChat();
+  }, [activeEmp, state.proxyUrl, view]);
+
+  // Load shared persistent research reports on mount or proxy change
+  useEffect(() => {
+    const loadResearch = async () => {
+      try {
+        const res = await fetchWithRetry(`${PROXY_BASE_URL}/research-reports`, {});
+        const data = await res.json();
+        dispatch({ type: "SET_RESEARCH", payload: data });
+      } catch (err) {
+        console.error("Error loading research reports:", err);
+      }
+    };
+    loadResearch();
+  }, [state.proxyUrl, view]);
 
   // ── Scroll to bottom ──
   useEffect(() => { ceoChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [state.ceoChats, ceoStream]);
@@ -3741,7 +4008,7 @@ export default function ApexOS() {
     // BUILD MODE Classification Rule
     let isBuildRequest = false;
     if (!isRealCommand) {
-      if (
+      const hasBuildKeyword =
         normalizedText.includes("create") ||
         normalizedText.includes("build") ||
         normalizedText.includes("improve") ||
@@ -3750,8 +4017,17 @@ export default function ApexOS() {
         normalizedText.includes("generate") ||
         normalizedText.includes("develop") ||
         normalizedText.includes("code") ||
-        normalizedText.includes("ship")
-      ) {
+        normalizedText.includes("ship");
+
+      const isTaskOrSimulation =
+        normalizedText.includes("task") ||
+        normalizedText.includes("tasks") ||
+        normalizedText.includes("simulation") ||
+        normalizedText.includes("simulations") ||
+        normalizedText.includes("report") ||
+        normalizedText.includes("reports");
+
+      if (hasBuildKeyword && !isTaskOrSimulation) {
         isBuildRequest = true;
       }
     }
@@ -5111,6 +5387,17 @@ Compile this data and produce a comprehensive, professional report.`;
 
       dispatch({ type: "ADD_RESEARCH", payload: researchEntry });
 
+      // Save report persistently to backend disk store
+      try {
+        await fetchWithRetry(`${PROXY_BASE_URL}/research-reports`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ report: researchEntry })
+        });
+      } catch (e) {
+        console.error("Error saving research report to backend:", e);
+      }
+
       MemoryEngine.store(dispatch, {
         category: "insight",
         content: `Research: "${searchTerms.slice(0,80)}" — ${reportParsed.executiveSummary.slice(0,160)}`,
@@ -6079,9 +6366,31 @@ Empirical DNA Synthesis Profile to stress-test:
       setEmpFile(null);
     }
 
-    dispatch({ type: "ADD_EMP_MSG", empId: activeEmp, payload: { id: Date.now(), role: "user", content, display: text } });
-    dispatch({ type: "ADD_EMP_MSG", empId: activeEmp, payload: { id: Date.now() + 1, role: "assistant", content: "", streaming: true } });
+    const userMsgId = Date.now();
+    const assistantMsgId = Date.now() + 1;
+
+    const userMsg = { id: userMsgId, role: "user", content, display: text };
+    const assistantMsg = { id: assistantMsgId, role: "assistant", content: "", streaming: true };
+
+    dispatch({ type: "ADD_EMP_MSG", empId: activeEmp, payload: userMsg });
+    dispatch({ type: "ADD_EMP_MSG", empId: activeEmp, payload: assistantMsg });
     setEmpLoading(true); setEmpStream("");
+
+    // POST user and assistant messages to backend
+    try {
+      await fetchWithRetry(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMsg })
+      });
+      await fetchWithRetry(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: assistantMsg })
+      });
+    } catch (e) {
+      console.error("Error saving user/assistant messages to backend:", e);
+    }
 
     try {
       let reply;
@@ -6109,8 +6418,28 @@ Empirical DNA Synthesis Profile to stress-test:
       dispatch({ type: "UPDATE_EMP_LAST", empId: activeEmp, payload: { content: reply, streaming: false } });
       setEmpStream("");
       addActivity(`${emp.name} responded`, emp.icon);
+
+      // PATCH assistant message to backend with final reply
+      try {
+        await fetchWithRetry(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageId: assistantMsgId, content: reply, streaming: false })
+        });
+      } catch (err) {
+        console.error("Error updating assistant message on backend:", err);
+      }
     } catch (e) {
       dispatch({ type: "UPDATE_EMP_LAST", empId: activeEmp, payload: { content: `⚠️ Error: ${e.message}`, streaming: false } });
+
+      // PATCH assistant message to backend with error
+      try {
+        await fetchWithRetry(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageId: assistantMsgId, content: `⚠️ Error: ${e.message}`, streaming: false })
+        });
+      } catch (err) {}
     }
     setEmpLoading(false);
   }, [empInput, empLoading, empFile, activeEmp, state.empChats, state.company, state.memory, addActivity, runRealResearch, runRealAlgorithmEngineering, runRealDNAEngineering, runRealSimulationEngineering, runRealStorageArchitect]);
@@ -6586,7 +6915,14 @@ Empirical DNA Synthesis Profile to stress-test:
                     <div style={{ fontSize: "0.66rem", color: T.text3 }}>{emp.title}</div>
                   </div>
                   {(state.empChats[activeEmp] || []).length > 0 && (
-                    <button onClick={() => dispatch({ type: "CLEAR_EMP_CHAT", empId: activeEmp })} style={{ marginLeft: "auto", background: "none", border: `1px solid ${T.border2}`, borderRadius: 8, color: T.text3, padding: "5px 11px", fontSize: "0.7rem", cursor: "pointer" }}>Clear Chat</button>
+                    <button onClick={async () => {
+                      try {
+                        await fetch(`${PROXY_BASE_URL}/team-chat/${activeEmp}`, { method: "DELETE" });
+                      } catch (e) {
+                        console.error("Error clearing chat on backend:", e);
+                      }
+                      dispatch({ type: "CLEAR_EMP_CHAT", empId: activeEmp });
+                    }} style={{ marginLeft: "auto", background: "none", border: `1px solid ${T.border2}`, borderRadius: 8, color: T.text3, padding: "5px 11px", fontSize: "0.7rem", cursor: "pointer" }}>Clear Chat</button>
                   )}
                 </div>
 

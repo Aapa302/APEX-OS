@@ -1,3 +1,38 @@
-
-❌ Missing required environment variable: GEMINI_API_KEY
-   Copy .env.example to .env and fill it in.
+[GeminiModelResolver] Attempting to auto-detect Gemini model via: https://generativelanguage.googleapis.com/v1/models
+[GeminiModelResolver] ListModels failed (ListModels failed with status 400: {
+  "error": {
+    "code": 400,
+    "message": "API key not valid. Please pass a valid API key.",
+    "status": "INVALID_ARGUMENT",
+    "details": [
+      {
+        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+        "reason": "API_KEY_INVALID",
+        "domain": "googleapis.com",
+        "metadata": {
+          "service": "generativelanguage.googleapis.com"
+        }
+      },
+      {
+        "@type": "type.googleapis.com/google.rpc.LocalizedMessage",
+        "locale": "en-US",
+        "message": "API key not valid. Please pass a valid API key."
+      }
+    ]
+  }
+}
+). Entering fallback sequence...
+[GeminiModelResolver] Probing fallback candidate [gemini-2.5-flash]...
+[GeminiModelResolver] Probing fallback candidate [gemini-2.0-flash]...
+[GeminiModelResolver] Probing fallback candidate [gemini-2.5-pro]...
+[GeminiModelResolver] Probing fallback candidate [gemini-2.0-pro]...
+[GeminiModelResolver] Probing fallback candidate [gemini-flash-latest]...
+[GeminiModelResolver] Probing fallback candidate [gemini-pro-latest]...
+[GeminiModelResolver] All fallback probes failed. Defaulting to: gemini-2.5-flash
+{"ts":"2026-07-19T06:21:05.587Z","level":"info","message":"APEX Gemini Proxy running","data":{"port":8787,"env":"development","provider":"gemini","model":"gemini-2.5-flash","cors":"*","rateLimitPerMin":120}}
+{"ts":"2026-07-19T06:21:05.591Z","level":"info","message":"Proxy endpoint: http://localhost:8787/v1/messages"}
+{"ts":"2026-07-19T06:21:05.591Z","level":"info","message":"Health check:   http://localhost:8787/health"}
+{"ts":"2026-07-19T06:21:05.591Z","level":"warn","message":"⚠️ Warning: NCBI API Key is not set. Routes under /api/ncbi/ will return errors until NCBI_API_KEY or VITE_NCBI_API_KEY is provided."}
+2026-07-19T06:21:07.067Z POST /simulations 201 8.468 ms
+{"ts":"2026-07-19T06:21:07.116Z","level":"info","message":"Received SIGTERM. Shutting down gracefully…"}
+{"ts":"2026-07-19T06:21:07.116Z","level":"info","message":"Server closed."}

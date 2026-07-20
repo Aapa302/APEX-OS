@@ -613,6 +613,381 @@ async function runTests() {
     assert.strictEqual(logsData.length, 2, "There should be exactly 2 run history logs recorded");
 
     console.log("✅ Passed: DNA Health Check Express Routes integration\n");
+    // ── 13. Test Simulations Express Routes ────────────────────
+    console.log("Testing: Simulations Express Routes integration...");
+    const BASE_SIMULATIONS_URL = `http://localhost:${PORT}/simulations`;
+
+    // A. Read initial simulations
+    const initialSimsRes = await fetch(BASE_SIMULATIONS_URL);
+    assert.strictEqual(initialSimsRes.status, 200, "GET /simulations should return 200");
+    const initialSims = await initialSimsRes.json();
+    assert.ok(Array.isArray(initialSims), "GET /simulations should return an array");
+    const initialSimsLength = initialSims.length;
+
+    // B. Create a new simulation (POST /simulations)
+    console.log("  - POST /simulations (create simulation)");
+    const createSimRes = await fetch(BASE_SIMULATIONS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test Monte Carlo Sequencing Pass",
+        type: "Sequencing Profiler",
+        status: "queued",
+        progress: 0,
+        estimatedTime: "2m 15s"
+      })
+    });
+    assert.strictEqual(createSimRes.status, 201, "POST /simulations should return 201 created");
+    const simData = await createSimRes.json();
+    assert.ok(simData.id, "Created simulation should have an ID");
+    assert.strictEqual(simData.name, "Test Monte Carlo Sequencing Pass");
+    assert.strictEqual(simData.type, "Sequencing Profiler");
+    assert.strictEqual(simData.status, "queued");
+    assert.strictEqual(simData.progress, 0);
+    assert.strictEqual(simData.estimatedTime, "2m 15s");
+
+    // C. Verify simulation list count increased
+    const updatedSimsRes = await fetch(BASE_SIMULATIONS_URL);
+    const updatedSims = await updatedSimsRes.json();
+    assert.strictEqual(updatedSims.length, initialSimsLength + 1, "Simulations list count should increase by 1");
+    const foundSim = updatedSims.find(s => s.id === simData.id);
+    assert.ok(foundSim, "The created simulation should be in the retrieved list");
+
+    // D. Update simulation progress/status (PATCH /simulations/:id)
+    console.log(`  - PATCH /simulations/${simData.id} (update progress)`);
+    const updateSimRes = await fetch(`${BASE_SIMULATIONS_URL}/${simData.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "running",
+        progress: 50,
+        estimatedTime: "1m"
+      })
+    });
+    assert.strictEqual(updateSimRes.status, 200, "PATCH /simulations/:id should return 200");
+    const updatedSimData = await updateSimRes.json();
+    assert.strictEqual(updatedSimData.status, "running", "Simulation status should update to 'running'");
+    assert.strictEqual(updatedSimData.progress, 50, "Simulation progress should update to 50");
+    assert.strictEqual(updatedSimData.estimatedTime, "1m", "Simulation estimatedTime should update");
+
+    // E. Delete simulation (DELETE /simulations/:id)
+    console.log(`  - DELETE /simulations/${simData.id} (delete simulation)`);
+    const deleteSimRes = await fetch(`${BASE_SIMULATIONS_URL}/${simData.id}`, {
+      method: "DELETE"
+    });
+    assert.strictEqual(deleteSimRes.status, 200, "DELETE /simulations/:id should return 200");
+    const deleteSimData = await deleteSimRes.json();
+    assert.strictEqual(deleteSimData.simulation.id, simData.id, "Returned deleted simulation should match the ID");
+
+    // F. Verify deletion
+    const finalSimsRes = await fetch(BASE_SIMULATIONS_URL);
+    const finalSims = await finalSimsRes.json();
+    assert.strictEqual(finalSims.length, initialSimsLength, "Simulations length should revert to initial size");
+    const deletedSimLookup = finalSims.find(s => s.id === simData.id);
+    assert.ok(!deletedSimLookup, "Deleted simulation should no longer exist in the list");
+
+    console.log("✅ Passed: Simulations Express Routes integration\n");
+
+    // ── 14. Test Team Chat Express Routes ──────────────────────
+    console.log("Testing: Team Chat Express Routes integration...");
+    const BASE_CHAT_URL = `http://localhost:${PORT}/team-chat`;
+
+    // A. Read initial chat history for an arbitrary employee
+    const initialChatRes = await fetch(`${BASE_CHAT_URL}/researcher`);
+    assert.strictEqual(initialChatRes.status, 200, "GET /team-chat/:memberId should return 200");
+    const initialChat = await initialChatRes.json();
+    assert.ok(Array.isArray(initialChat), "GET /team-chat/:memberId should return an array");
+
+    // B. Save a user message (POST /team-chat/:memberId)
+    console.log("  - POST /team-chat/:memberId (save message)");
+    const saveUserRes = await fetch(`${BASE_CHAT_URL}/researcher`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          id: 111111,
+          role: "user",
+          content: "Hello Dr. Mei Lin",
+          display: "Hello Dr. Mei Lin"
+        }
+      })
+    });
+    assert.strictEqual(saveUserRes.status, 201, "POST should return 201 created");
+    const savedChat = await saveUserRes.json();
+    assert.ok(savedChat.length > 0, "Returned array should contain the new message");
+    const lastMsg = savedChat[savedChat.length - 1];
+    assert.strictEqual(lastMsg.id, 111111);
+    assert.strictEqual(lastMsg.role, "user");
+    assert.strictEqual(lastMsg.content, "Hello Dr. Mei Lin");
+
+    // C. Save assistant streaming message (POST)
+    const saveAssistantRes = await fetch(`${BASE_CHAT_URL}/researcher`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          id: 222222,
+          role: "assistant",
+          content: "",
+          streaming: true
+        }
+      })
+    });
+    assert.strictEqual(saveAssistantRes.status, 201);
+
+    // D. Update assistant reply (PATCH /team-chat/:memberId)
+    console.log("  - PATCH /team-chat/:memberId (update reply)");
+    const patchRes = await fetch(`${BASE_CHAT_URL}/researcher`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messageId: 222222,
+        content: "Hello! I am Mei.",
+        streaming: false
+      })
+    });
+    assert.strictEqual(patchRes.status, 200);
+    const patchedHistory = await patchRes.json();
+    const patchedMsg = patchedHistory.find(m => m.id === 222222);
+    assert.ok(patchedMsg);
+    assert.strictEqual(patchedMsg.content, "Hello! I am Mei.");
+    assert.strictEqual(patchedMsg.streaming, false);
+
+    // E. Clear Chat (DELETE /team-chat/:memberId)
+    console.log("  - DELETE /team-chat/:memberId (clear history)");
+    const clearRes = await fetch(`${BASE_CHAT_URL}/researcher`, {
+      method: "DELETE"
+    });
+    assert.strictEqual(clearRes.status, 200);
+    const clearedHistory = await clearRes.json();
+    assert.strictEqual(clearedHistory.length, 0, "Cleared history should be an empty array");
+
+    console.log("✅ Passed: Team Chat Express Routes integration\n");
+
+    // ── 15. Test Research Reports Express Routes ───────────────
+    console.log("Testing: Research Reports Express Routes integration...");
+    const BASE_REPORTS_URL = `http://localhost:${PORT}/research-reports`;
+
+    // A. Read initial reports list
+    const initialReportsRes = await fetch(BASE_REPORTS_URL);
+    assert.strictEqual(initialReportsRes.status, 200, "GET /research-reports should return 200");
+    const initialReports = await initialReportsRes.json();
+    assert.ok(Array.isArray(initialReports), "GET /research-reports should return an array");
+    const initialReportsLength = initialReports.length;
+
+    // B. Save a new report (POST /research-reports)
+    console.log("  - POST /research-reports (save report)");
+    const createReportRes = await fetch(BASE_REPORTS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        report: {
+          id: "res_test_12345",
+          query: "BRCA1 genetic drift notes",
+          executiveSummary: "This represents BRCA1 notes.",
+          confidenceScore: 92
+        }
+      })
+    });
+    assert.strictEqual(createReportRes.status, 201, "POST /research-reports should return 201 created");
+    const savedReport = await createReportRes.json();
+    assert.strictEqual(savedReport.id, "res_test_12345");
+    assert.strictEqual(savedReport.query, "BRCA1 genetic drift notes");
+    assert.strictEqual(savedReport.executiveSummary, "This represents BRCA1 notes.");
+    assert.strictEqual(savedReport.confidenceScore, 92);
+
+    // C. Verify report list count increased
+    const updatedReportsRes = await fetch(BASE_REPORTS_URL);
+    const updatedReports = await updatedReportsRes.json();
+    assert.strictEqual(updatedReports.length, initialReportsLength + 1, "Reports count should increase by 1");
+    const foundReport = updatedReports.find(r => r.id === "res_test_12345");
+    assert.ok(foundReport, "The created report should be in the retrieved list");
+
+    console.log("✅ Passed: Research Reports Express Routes integration\n");
+
+    // ── 16. Test DNA Encoder V1 Express Routes ───────────────────
+    console.log("Testing: DNA Encoder V1 Express Routes integration...");
+    const BASE_V1_URL = `http://localhost:${PORT}`;
+
+    // Test Encoding
+    console.log("  - POST /dna-encode (text -> DNA)");
+    const v1EncodeRes = await fetch(`${BASE_V1_URL}/dna-encode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "APEX-1" })
+    });
+    assert.strictEqual(v1EncodeRes.status, 200, "POST /dna-encode should return 200");
+    const v1EncodeData = await v1EncodeRes.json();
+    assert.strictEqual(v1EncodeData.success, true);
+    assert.ok(v1EncodeData.dna, "Should return encoded DNA sequence");
+
+    // Test Decoding
+    console.log("  - POST /dna-decode (DNA -> text)");
+    const v1DecodeRes = await fetch(`${BASE_V1_URL}/dna-decode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dna: v1EncodeData.dna })
+    });
+    assert.strictEqual(v1DecodeRes.status, 200, "POST /dna-decode should return 200");
+    const v1DecodeData = await v1DecodeRes.json();
+    assert.strictEqual(v1DecodeData.success, true);
+    assert.strictEqual(v1DecodeData.text, "APEX-1", "Decoded text must exactly match 'APEX-1'");
+
+    // Test File Encoding
+    console.log("  - POST /dna-encode-file (multipart/form-data)");
+    const boundary = "----WebKitFormBoundaryAPEXTestBoundary";
+    const filename = "small-test-icon.png";
+    const mimetype = "image/png";
+    const fileBytes = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52]); // 16 bytes dummy PNG header
+
+    const multipartBody = Buffer.concat([
+      Buffer.from(`--${boundary}\r\n`),
+      Buffer.from(`Content-Disposition: form-data; name="file"; filename="${filename}"\r\n`),
+      Buffer.from(`Content-Type: ${mimetype}\r\n\r\n`),
+      fileBytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`)
+    ]);
+
+    const fileEncodeRes = await fetch(`${BASE_V1_URL}/dna-encode-file`, {
+      method: "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+      body: multipartBody
+    });
+    assert.strictEqual(fileEncodeRes.status, 200, "POST /dna-encode-file should return 200");
+    const fileEncodeData = await fileEncodeRes.json();
+    assert.strictEqual(fileEncodeData.success, true);
+    assert.strictEqual(fileEncodeData.filename, filename);
+    assert.strictEqual(fileEncodeData.mimetype, mimetype);
+    assert.ok(fileEncodeData.dna);
+
+    // Test File Decoding
+    console.log("  - POST /dna-decode-file (DNA -> binary buffer)");
+    const fileDecodeRes = await fetch(`${BASE_V1_URL}/dna-decode-file`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dna: fileEncodeData.dna,
+        filename: filename,
+        mimetype: mimetype
+      })
+    });
+    assert.strictEqual(fileDecodeRes.status, 200, "POST /dna-decode-file should return 200");
+    assert.strictEqual(fileDecodeRes.headers.get("Content-Type"), mimetype);
+    assert.ok(fileDecodeRes.headers.get("Content-Disposition").includes(filename));
+
+    // Read response buffer and compare bytes
+    const decodedBlob = await fileDecodeRes.arrayBuffer();
+    const decodedBuffer = Buffer.from(decodedBlob);
+    assert.strictEqual(Buffer.compare(fileBytes, decodedBuffer), 0, "Decoded file buffer must match original byte-for-byte");
+
+    // Test Size Limit (600KB file)
+    console.log("  - POST /dna-encode-file size limit check (600KB file)");
+    const largeFileBytes = Buffer.alloc(600 * 1024); // 600KB
+    const largeMultipartBody = Buffer.concat([
+      Buffer.from(`--${boundary}\r\n`),
+      Buffer.from(`Content-Disposition: form-data; name="file"; filename="large.png"\r\n`),
+      Buffer.from(`Content-Type: image/png\r\n\r\n`),
+      largeFileBytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`)
+    ]);
+
+    const largeFileRes = await fetch(`${BASE_V1_URL}/dna-encode-file`, {
+      method: "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+      body: largeMultipartBody
+    });
+    assert.strictEqual(largeFileRes.status, 400, "POST /dna-encode-file with 600KB file should return 400");
+    const largeFileData = await largeFileRes.json();
+    assert.strictEqual(largeFileData.error, "File too large for current version");
+
+    console.log("✅ Passed: DNA Encoder V1 Express Routes integration\n");
+
+    // ── 17. Test DNA Synthesizer Express Route ─────────────────
+    console.log("Testing: DNA Synthesizer Express Route integration (POST /dna-synthesize)...");
+
+    // A. Valid short sequence synthesis
+    console.log("  - POST /dna-synthesize (short sequence ≤ 200bp)");
+    const synthShortRes = await fetch(`${BASE_V1_URL}/dna-synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sequence: "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT",
+        name: "test_short"
+      })
+    });
+    assert.strictEqual(synthShortRes.status, 200, "Should return 200");
+    assert.strictEqual(synthShortRes.headers.get("content-type").includes("text/plain"), true);
+    assert.strictEqual(synthShortRes.headers.get("content-disposition").includes('filename="test_short.fasta"'), true);
+    const synthShortText = await synthShortRes.text();
+
+    // Check comments
+    assert.strictEqual(synthShortText.includes("; APEX DNA Synthesizer Export"), true);
+    assert.strictEqual(synthShortText.includes("; Sequence Length: 64 bp"), true);
+    assert.strictEqual(synthShortText.includes("; GC Content: 50.00%"), true);
+    assert.strictEqual(synthShortText.includes("; Homopolymer Check: PASS"), true);
+    // Check header and sequence
+    assert.strictEqual(synthShortText.includes(">test_short"), true);
+    // Sequence is wrapped to 60 characters per line, so we replace whitespace to verify
+    const cleanSynthShortSeq = synthShortText.replace(/;[^\n]*\n/g, "").replace(/>[^\n]*\n/g, "").replace(/\s/g, "");
+    assert.strictEqual(cleanSynthShortSeq, "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT");
+
+    // B. Long sequence synthesis with automatic chunking (> 200bp) and wrapping
+    console.log("  - POST /dna-synthesize (long sequence > 200bp with chunking and wrapping)");
+    // Generate 250bp sequence with a homopolymer FAIL run
+    const longSeq = "A".repeat(10) + "C".repeat(120) + "G".repeat(120); // 250 bp
+    const synthLongRes = await fetch(`${BASE_V1_URL}/dna-synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dna: longSeq,
+        sequenceName: "test_long"
+      })
+    });
+    assert.strictEqual(synthLongRes.status, 200, "Should return 200");
+    const synthLongText = await synthLongRes.text();
+
+    // Check comments
+    assert.strictEqual(synthLongText.includes("; Sequence Length: 250 bp"), true);
+    assert.strictEqual(synthLongText.includes("; Homopolymer Check: FAIL"), true);
+    // Check chunking headers
+    assert.strictEqual(synthLongText.includes(">test_long_chunk_1"), true);
+    assert.strictEqual(synthLongText.includes(">test_long_chunk_2"), true);
+    // Check wrapping - search for 60 char lines
+    const lines = synthLongText.split("\n");
+    // Verify that DNA sequence lines do not exceed 60-70 characters (using 60)
+    for (const line of lines) {
+      if (line.trim() && !line.startsWith(";") && !line.startsWith(">")) {
+        assert.ok(line.length <= 60, `Sequence line length should be <= 60 characters but was ${line.length}`);
+      }
+    }
+
+    // C. Validation errors (invalid characters)
+    console.log("  - POST /dna-synthesize (invalid characters check)");
+    const synthInvalidRes = await fetch(`${BASE_V1_URL}/dna-synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sequence: "ACGTACTXCGT"
+      })
+    });
+    assert.strictEqual(synthInvalidRes.status, 400, "Should fail with 400");
+    const invalidErr = await synthInvalidRes.json();
+    assert.ok(invalidErr.error.includes("invalid characters"), "Should describe invalid characters");
+
+    // D. Validation errors (empty sequence)
+    console.log("  - POST /dna-synthesize (empty sequence check)");
+    const synthEmptyRes = await fetch(`${BASE_V1_URL}/dna-synthesize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sequence: "   \n  "
+      })
+    });
+    assert.strictEqual(synthEmptyRes.status, 400, "Should fail with 400");
+    const emptyErr = await synthEmptyRes.json();
+    assert.ok(emptyErr.error.includes("cannot be empty"), "Should describe empty sequence error");
+
+    console.log("✅ Passed: DNA Synthesizer Express Route integration\n");
 
     console.log("🎉 All tests passed!");
     process.exit(0);

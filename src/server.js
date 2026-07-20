@@ -18,6 +18,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
+const multer = require("multer");
 
 // Load and validate environment variables first — exits if GEMINI_API_KEY is missing
 const config = require("./config/env");
@@ -32,6 +33,9 @@ const architectureRouter = require("./routes/architecture");
 const companyRouter = require("./routes/company");
 const tasksRouter = require("./routes/tasks");
 const dnaHealthCheckRouter = require("./routes/dnaHealthCheck");
+const simulationsRouter = require("./routes/simulations");
+const teamChatRouter = require("./routes/teamChat");
+const researchReportsRouter = require("./routes/researchReports");
 const { resolveModel } = require("./services/GeminiModelResolver");
 
 const app = express();
@@ -51,7 +55,7 @@ const corsOptions = {
     // Totally permissive for sandbox compatibility
     callback(null, true);
   },
-  methods: ["GET", "POST", "OPTIONS"],
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
   credentials: true,
   maxAge: 86400,
@@ -84,6 +88,119 @@ const limiter = rateLimit({
 });
 app.use("/v1", limiter);
 
+// ── DNA-Encoder-v1 Endpoints ────────────────────────────────
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 } // 500KB limit
+});
+
+app.post("/dna-encode", (req, res, next) => {
+  try {
+    const text = req.body.text || req.body.data;
+    if (text === undefined) {
+      return res.status(400).json({ error: "Required parameter 'text' or 'data' is missing." });
+    }
+    const encoderV1 = require("./services/DNAEncoderV1Service");
+    const dna = encoderV1.encode(text);
+    res.json({ success: true, dna, text });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/dna-synthesize", (req, res, next) => {
+  try {
+    const inputSeq = req.body.sequence || req.body.dna;
+    const name = req.body.name || req.body.sequenceName || `APEX_SEQ_${Date.now()}`;
+
+    if (!inputSeq || typeof inputSeq !== "string") {
+      return res.status(400).json({ error: "Required parameter 'sequence' or 'dna' is missing or not a string." });
+    }
+
+    const rawSeq = inputSeq.replace(/\s/g, "").toUpperCase();
+    if (rawSeq.length === 0) {
+      return res.status(400).json({ error: "DNA sequence cannot be empty." });
+    }
+
+    if (/[^ACGT]/.test(rawSeq)) {
+      return res.status(400).json({ error: "DNA sequence contains invalid characters. Only A, C, G, T are allowed." });
+    }
+
+    // GC Content %
+    const gcCount = (rawSeq.match(/[GC]/g) || []).length;
+    const gcPercent = ((gcCount / rawSeq.length) * 100).toFixed(2);
+
+    // Homopolymer check status (runs of 4 or more identical consecutive nucleotides)
+    const hasHomopolymer = /([ACGT])\1\1\1/.test(rawSeq);
+    const homopolymerStatus = hasHomopolymer ? "FAIL" : "PASS";
+
+    // Split into chunks if sequence > 200bp
+    const chunks = [];
+    const chunkSize = 200;
+    if (rawSeq.length <= chunkSize) {
+      chunks.push({
+        header: name,
+        seq: rawSeq
+      });
+    } else {
+      for (let i = 0, chunkIdx = 1; i < rawSeq.length; i += chunkSize, chunkIdx++) {
+        chunks.push({
+          header: `${name}_chunk_${chunkIdx}`,
+          seq: rawSeq.slice(i, i + chunkSize)
+        });
+      }
+    }
+
+    // Wrap sequence to 60-70 characters per line (using 60 as standard)
+    const wrapSequence = (seq, length = 60) => {
+      const lines = [];
+      for (let i = 0; i < seq.length; i += length) {
+        lines.push(seq.slice(i, i + length));
+      }
+      return lines.join("\n");
+    };
+
+    // Format FASTA content
+    let fastaLines = [];
+    fastaLines.push(`; APEX DNA Synthesizer Export`);
+    fastaLines.push(`; Sequence Length: ${rawSeq.length} bp`);
+    fastaLines.push(`; GC Content: ${gcPercent}%`);
+    fastaLines.push(`; Homopolymer Check: ${homopolymerStatus}`);
+
+    for (const chunk of chunks) {
+      fastaLines.push(`>${chunk.header}`);
+      fastaLines.push(wrapSequence(chunk.seq, 60));
+    }
+
+    const fastaContent = fastaLines.join("\n") + "\n";
+
+    const safeFileName = name.replace(/[^a-z0-9-_]/gi, "_") || "dna_sequence";
+    res.set({
+      "Content-Type": "text/plain",
+      "Content-Disposition": `attachment; filename="${safeFileName}.fasta"`,
+      "Content-Length": Buffer.byteLength(fastaContent)
+    });
+
+    res.send(fastaContent);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/dna-decode", (req, res, next) => {
+  try {
+    const dna = req.body.dna || req.body.sequence;
+    if (dna === undefined) {
+      return res.status(400).json({ error: "Required parameter 'dna' or 'sequence' is missing." });
+    }
+    const encoderV1 = require("./services/DNAEncoderV1Service");
+    const text = encoderV1.decode(dna);
+    res.json({ success: true, text, dna });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ── Routes ───────────────────────────────────────────────────
 app.use("/health", healthRouter);
 app.use("/v1/messages", messagesRouter);
@@ -94,6 +211,9 @@ app.use("/api/architecture", architectureRouter);
 app.use("/api/company", companyRouter);
 app.use("/tasks", tasksRouter);
 app.use("/dna-health-check", dnaHealthCheckRouter);
+app.use("/simulations", simulationsRouter);
+app.use("/team-chat", teamChatRouter);
+app.use("/research-reports", researchReportsRouter);
 
 // ── 404 ──────────────────────────────────────────────────────
 app.use(notFoundHandler);
