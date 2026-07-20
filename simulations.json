@@ -37,6 +37,8 @@
     ],
     "original": "APEX-OS Block 3",
     "strategy": "base4"
+  },
+  {
     "id": "sim-1",
     "name": "Thermal PCR Cycling Simulation",
     "type": "PCR Amplification",
