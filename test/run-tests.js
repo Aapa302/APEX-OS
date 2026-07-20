@@ -735,6 +735,73 @@ async function runTests() {
     assert.strictEqual(v1DecodeData.success, true);
     assert.strictEqual(v1DecodeData.text, "APEX-1", "Decoded text must exactly match 'APEX-1'");
 
+    // Test File Encoding
+    console.log("  - POST /dna-encode-file (multipart/form-data)");
+    const boundary = "----WebKitFormBoundaryAPEXTestBoundary";
+    const filename = "small-test-icon.png";
+    const mimetype = "image/png";
+    const fileBytes = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52]); // 16 bytes dummy PNG header
+
+    const multipartBody = Buffer.concat([
+      Buffer.from(`--${boundary}\r\n`),
+      Buffer.from(`Content-Disposition: form-data; name="file"; filename="${filename}"\r\n`),
+      Buffer.from(`Content-Type: ${mimetype}\r\n\r\n`),
+      fileBytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`)
+    ]);
+
+    const fileEncodeRes = await fetch(`${BASE_V1_URL}/dna-encode-file`, {
+      method: "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+      body: multipartBody
+    });
+    assert.strictEqual(fileEncodeRes.status, 200, "POST /dna-encode-file should return 200");
+    const fileEncodeData = await fileEncodeRes.json();
+    assert.strictEqual(fileEncodeData.success, true);
+    assert.strictEqual(fileEncodeData.filename, filename);
+    assert.strictEqual(fileEncodeData.mimetype, mimetype);
+    assert.ok(fileEncodeData.dna);
+
+    // Test File Decoding
+    console.log("  - POST /dna-decode-file (DNA -> binary buffer)");
+    const fileDecodeRes = await fetch(`${BASE_V1_URL}/dna-decode-file`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dna: fileEncodeData.dna,
+        filename: filename,
+        mimetype: mimetype
+      })
+    });
+    assert.strictEqual(fileDecodeRes.status, 200, "POST /dna-decode-file should return 200");
+    assert.strictEqual(fileDecodeRes.headers.get("Content-Type"), mimetype);
+    assert.ok(fileDecodeRes.headers.get("Content-Disposition").includes(filename));
+
+    // Read response buffer and compare bytes
+    const decodedBlob = await fileDecodeRes.arrayBuffer();
+    const decodedBuffer = Buffer.from(decodedBlob);
+    assert.strictEqual(Buffer.compare(fileBytes, decodedBuffer), 0, "Decoded file buffer must match original byte-for-byte");
+
+    // Test Size Limit (600KB file)
+    console.log("  - POST /dna-encode-file size limit check (600KB file)");
+    const largeFileBytes = Buffer.alloc(600 * 1024); // 600KB
+    const largeMultipartBody = Buffer.concat([
+      Buffer.from(`--${boundary}\r\n`),
+      Buffer.from(`Content-Disposition: form-data; name="file"; filename="large.png"\r\n`),
+      Buffer.from(`Content-Type: image/png\r\n\r\n`),
+      largeFileBytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`)
+    ]);
+
+    const largeFileRes = await fetch(`${BASE_V1_URL}/dna-encode-file`, {
+      method: "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+      body: largeMultipartBody
+    });
+    assert.strictEqual(largeFileRes.status, 400, "POST /dna-encode-file with 600KB file should return 400");
+    const largeFileData = await largeFileRes.json();
+    assert.strictEqual(largeFileData.error, "File too large for current version");
+
     console.log("✅ Passed: DNA Encoder V1 Express Routes integration\n");
 
     // ── 17. Test DNA Synthesizer Express Route ─────────────────

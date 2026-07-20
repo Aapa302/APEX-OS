@@ -18,6 +18,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
+const multer = require("multer");
 
 // Load and validate environment variables first — exits if GEMINI_API_KEY is missing
 const config = require("./config/env");
@@ -87,6 +88,11 @@ const limiter = rateLimit({
 app.use("/v1", limiter);
 
 // ── DNA-Encoder-v1 Endpoints ────────────────────────────────
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 } // 500KB limit
+});
+
 app.post("/dna-encode", (req, res, next) => {
   try {
     const text = req.body.text || req.body.data;
