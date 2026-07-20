@@ -1,0 +1,52 @@
+[
+  {
+    "timestamp": "2026-07-20T14:57:10.908Z",
+    "scanned_count": 3,
+    "corrupted_found": 2,
+    "fixed_count": 2,
+    "details": [
+      {
+        "id": "sim_1",
+        "name": "BRCA1 Gene Segment Alpha",
+        "status": "healthy"
+      },
+      {
+        "id": "sim_2",
+        "name": "BRCA1 Gene Segment Beta (Corrupted)",
+        "status": "fixed",
+        "original_corrupted": "ACGTACGTACGGACGT",
+        "fixed_sequence": "ACGTACGTACGTACGT"
+      },
+      {
+        "id": "sim_3",
+        "name": "BRCA1 Gene Segment Gamma (Corrupted)",
+        "status": "fixed",
+        "original_corrupted": "ACGTGCGTACGTACGT",
+        "fixed_sequence": "ACGTACGTACGTACGT"
+      }
+    ]
+  },
+  {
+    "timestamp": "2026-07-20T14:57:10.912Z",
+    "scanned_count": 3,
+    "corrupted_found": 0,
+    "fixed_count": 0,
+    "details": [
+      {
+        "id": "sim_1",
+        "name": "BRCA1 Gene Segment Alpha",
+        "status": "healthy"
+      },
+      {
+        "id": "sim_2",
+        "name": "BRCA1 Gene Segment Beta (Corrupted)",
+        "status": "healthy"
+      },
+      {
+        "id": "sim_3",
+        "name": "BRCA1 Gene Segment Gamma (Corrupted)",
+        "status": "healthy"
+      }
+    ]
+  }
+]

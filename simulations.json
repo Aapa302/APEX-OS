@@ -1,0 +1,41 @@
+[
+  {
+    "id": "sim_1",
+    "name": "BRCA1 Gene Segment Alpha",
+    "sequence": "ACGTACGTACGTACGT",
+    "checksum": "cf573e65038d08ff910a3345642ffd1e8329844633c2dcb15964b324ebdba4d0",
+    "triplicates": [
+      "ACGTACGTACGTACGT",
+      "ACGTACGTACGTACGT",
+      "ACGTACGTACGTACGT"
+    ],
+    "original": "APEX-OS Block 1",
+    "strategy": "base4"
+  },
+  {
+    "id": "sim_2",
+    "name": "BRCA1 Gene Segment Beta (Corrupted)",
+    "sequence": "ACGTACGTACGTACGT",
+    "checksum": "cf573e65038d08ff910a3345642ffd1e8329844633c2dcb15964b324ebdba4d0",
+    "triplicates": [
+      "ACGTACGTACGTACGT",
+      "ACGTACGTACGTACGT",
+      "ACGTACGTACGGACGT"
+    ],
+    "original": "APEX-OS Block 2",
+    "strategy": "base4"
+  },
+  {
+    "id": "sim_3",
+    "name": "BRCA1 Gene Segment Gamma (Corrupted)",
+    "sequence": "ACGTACGTACGTACGT",
+    "checksum": "cf573e65038d08ff910a3345642ffd1e8329844633c2dcb15964b324ebdba4d0",
+    "triplicates": [
+      "ACGTACGTACGTACGT",
+      "ACGTGCGTACGTACGT",
+      "ACGTACGTACGTACGT"
+    ],
+    "original": "APEX-OS Block 3",
+    "strategy": "base4"
+  }
+]
