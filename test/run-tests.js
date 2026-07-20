@@ -29,12 +29,12 @@ async function runTests() {
       {
         "id": "sim_1",
         "name": "BRCA1 Gene Segment Alpha",
-        "sequence": "ACGTACGTACGTACGT",
-        "checksum": "cf573e65038d08ff910a3345642ffd1e8329844633c2dcb15964b324ebdba4d0",
+        "sequence": "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
+        "checksum": "79a1d2cce0f5d81f4ed1458b12a96d457d1ebdefcbcf46c86ff952414025bee8",
         "triplicates": [
-          "ACGTACGTACGTACGT",
-          "ACGTACGTACGTACGT",
-          "ACGTACGTACGTACGT"
+          "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
+          "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
+          "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC"
         ],
         "original": "APEX-OS Block 1",
         "strategy": "base4"
@@ -42,12 +42,12 @@ async function runTests() {
       {
         "id": "sim_2",
         "name": "BRCA1 Gene Segment Beta (Corrupted)",
-        "sequence": "ACGTACGTACGGACGT",
-        "checksum": "cf573e65038d08ff910a3345642ffd1e8329844633c2dcb15964b324ebdba4d0",
+        "sequence": "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
+        "checksum": "0ba9387afc1b3146ad383bc900775ca53abbb8b1f7db2fba883f9b485a68f55e",
         "triplicates": [
-          "ACGTACGTACGTACGT",
-          "ACGTACGTACGTACGT",
-          "ACGTACGTACGGACGT"
+          "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAG",
+          "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAG",
+          "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC"
         ],
         "original": "APEX-OS Block 2",
         "strategy": "base4"
@@ -55,12 +55,12 @@ async function runTests() {
       {
         "id": "sim_3",
         "name": "BRCA1 Gene Segment Gamma (Corrupted)",
-        "sequence": "ACGTGCGTACGTACGT",
-        "checksum": "cf573e65038d08ff910a3345642ffd1e8329844633c2dcb15964b324ebdba4d0",
+        "sequence": "CAACCCAACACCCCGAAGTCCATTCCATAGGACAAGCGTACGTTCGATCGGTAGAAATAT",
+        "checksum": "f8fdef7985e3cb43758fcbc4bf2f5f125e8292741e630ee68d6f828ffdd055f6",
         "triplicates": [
-          "ACGTACGTACGTACGT",
-          "ACGTGCGTACGTACGT",
-          "ACGTACGTACGTACGT"
+          "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAT",
+          "CAACCCAACACCCCGAAGTCCATTCCATAGGACAAGCGTACGTTCGATCGGTAGAAATAT",
+          "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAT"
         ],
         "original": "APEX-OS Block 3",
         "strategy": "base4"
@@ -588,11 +588,11 @@ async function runTests() {
 
     const sim2Report = firstCheckData.details.find(d => d.id === "sim_2");
     assert.strictEqual(sim2Report.status, "fixed");
-    assert.strictEqual(sim2Report.fixed_sequence, "ACGTACGTACGTACGT");
+    assert.strictEqual(sim2Report.fixed_sequence, "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAG");
 
     const sim3Report = firstCheckData.details.find(d => d.id === "sim_3");
     assert.strictEqual(sim3Report.status, "fixed");
-    assert.strictEqual(sim3Report.fixed_sequence, "ACGTACGTACGTACGT");
+    assert.strictEqual(sim3Report.fixed_sequence, "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAT");
 
     // B. Run second health check (everything should be healthy now)
     console.log("  - POST /dna-health-check (second run - all healthy expected)");
@@ -694,6 +694,37 @@ async function runTests() {
     }
 
     console.log("✅ Passed: DNA Health Check Express Routes integration\n");
+
+    // ── 14. Test DNA Search Express Routes ─────────────────────
+    console.log("Testing: DNA Search Express Routes integration...");
+    const BASE_SEARCH_DNA_URL = `http://localhost:${PORT}/api/search-dna`;
+
+    // A. Query with matching sequence (APEX-OS Block 1)
+    console.log("  - POST /api/search-dna (matching query)");
+    const searchMatchRes = await fetch(BASE_SEARCH_DNA_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "APEX-OS Block 1" })
+    });
+    assert.strictEqual(searchMatchRes.status, 200, "POST /api/search-dna should return 200");
+    const searchMatchData = await searchMatchRes.json();
+    assert.strictEqual(searchMatchData.found, true, "Should find the sequence");
+    assert.ok(searchMatchData.matches.length > 0, "Matches list should not be empty");
+    assert.strictEqual(searchMatchData.matches[0].sequence_id, "sim_1", "Matched sequence ID should be sim_1");
+
+    // B. Query with non-matching sequence
+    console.log("  - POST /api/search-dna (non-matching query)");
+    const searchNoMatchRes = await fetch(BASE_SEARCH_DNA_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "This string does not exist in any DNA sequence" })
+    });
+    assert.strictEqual(searchNoMatchRes.status, 200, "POST /api/search-dna should return 200");
+    const searchNoMatchData = await searchNoMatchRes.json();
+    assert.strictEqual(searchNoMatchData.found, false, "Should not find the sequence");
+    assert.strictEqual(searchNoMatchData.matches.length, 0, "Matches list should be empty");
+
+    console.log("✅ Passed: DNA Search Express Routes integration\n");
 
     console.log("🎉 All tests passed!");
     process.exit(0);
