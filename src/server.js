@@ -18,6 +18,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
+const multer = require("multer");
 
 // Load and validate environment variables first — exits if GEMINI_API_KEY is missing
 const config = require("./config/env");
@@ -87,6 +88,11 @@ const limiter = rateLimit({
 app.use("/v1", limiter);
 
 // ── DNA-Encoder-v1 Endpoints ────────────────────────────────
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 } // 500KB limit
+});
+
 app.post("/dna-encode", (req, res, next) => {
   try {
     const text = req.body.text || req.body.data;
@@ -96,6 +102,63 @@ app.post("/dna-encode", (req, res, next) => {
     const encoderV1 = require("./services/DNAEncoderV1Service");
     const dna = encoderV1.encode(text);
     res.json({ success: true, dna, text });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/dna-encode-file", (req, res, next) => {
+  upload.single("file")(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: "File too large for current version" });
+      }
+      return next(err);
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded." });
+    }
+
+    try {
+      const encoderV1 = require("./services/DNAEncoderV1Service");
+      const dna = encoderV1.encodeBuffer(req.file.buffer);
+
+      const response = {
+        success: true,
+        filename: req.file.originalname,
+        mimetype: req.file.mimetype,
+        length: dna.length,
+        dna: dna
+      };
+
+      if (dna.length > 1000) {
+        response.preview = dna.slice(0, 1000) + "...";
+      }
+
+      res.json(response);
+    } catch (encodeErr) {
+      next(encodeErr);
+    }
+  });
+});
+
+app.post("/dna-decode-file", (req, res, next) => {
+  try {
+    const dna = req.body.dna || req.body.sequence;
+    const filename = req.body.filename || "decoded-file";
+    const mimetype = req.body.mimetype || "application/octet-stream";
+
+    if (!dna) {
+      return res.status(400).json({ error: "Required parameter 'dna' or 'sequence' is missing." });
+    }
+
+    const encoderV1 = require("./services/DNAEncoderV1Service");
+    const buffer = encoderV1.decodeToBuffer(dna);
+
+    res.setHeader("Content-Type", mimetype);
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buffer);
   } catch (error) {
     next(error);
   }

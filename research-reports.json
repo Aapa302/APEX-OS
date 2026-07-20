@@ -10,5 +10,17 @@
     "query": "BRCA1 genetic drift notes",
     "executiveSummary": "This represents BRCA1 notes.",
     "confidenceScore": 92
+  },
+  {
+    "id": "res_test_12345",
+    "query": "BRCA1 genetic drift notes",
+    "executiveSummary": "This represents BRCA1 notes.",
+    "confidenceScore": 92
+  },
+  {
+    "id": "res_test_12345",
+    "query": "BRCA1 genetic drift notes",
+    "executiveSummary": "This represents BRCA1 notes.",
+    "confidenceScore": 92
   }
 ]
