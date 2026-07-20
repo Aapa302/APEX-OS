@@ -16,7 +16,13 @@ function sha256(str) {
 async function readSimulations() {
   try {
     const data = await fs.readFile(SIMULATIONS_FILE, "utf8");
-    return JSON.parse(data);
+    try {
+      return JSON.parse(data);
+    } catch (parseErr) {
+      const err = new Error(parseErr.message);
+      err.name = "CorruptedSimulationsError";
+      throw err;
+    }
   } catch (error) {
     if (error.code === "ENOENT") {
       return [];
@@ -158,6 +164,12 @@ router.post("/", async (req, res, next) => {
 
     res.json(logEntry);
   } catch (error) {
+    if (error.name === "CorruptedSimulationsError") {
+      return res.status(422).json({
+        error: "simulations.json is corrupted",
+        details: error.message
+      });
+    }
     next(error);
   }
 });
