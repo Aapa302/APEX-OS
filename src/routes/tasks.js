@@ -9,13 +9,7 @@ const TASKS_FILE = path.join(__dirname, "../../tasks.json");
 async function readTasks() {
   try {
     const data = await fs.readFile(TASKS_FILE, "utf8");
-    const tasks = JSON.parse(data);
-    return tasks.map(t => {
-      const colVal = t.column || t.status || "todo";
-      t.column = colVal;
-      t.status = colVal;
-      return t;
-    });
+    return JSON.parse(data);
   } catch (error) {
     if (error.code === "ENOENT") {
       await fs.writeFile(TASKS_FILE, JSON.stringify([], null, 2));
@@ -75,7 +69,6 @@ router.post("/", async (req, res, next) => {
       description: (description || "").trim(),
       phase: phase.trim(),
       column: taskColumn,
-      status: taskColumn,
       assignee: (assignee || "Unassigned").trim(),
       priority: (priority || "medium").toLowerCase().trim(),
       createdAt: new Date().toISOString()
@@ -114,7 +107,6 @@ router.patch("/:id", async (req, res, next) => {
       }
       if (validColumns.includes(normalized)) {
         task.column = normalized;
-        task.status = normalized;
       } else {
         return res.status(400).json({ error: `Invalid column/status. Must be one of: ${validColumns.join(", ")}` });
       }
