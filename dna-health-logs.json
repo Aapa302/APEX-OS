@@ -1,6 +1,6 @@
 [
   {
-    "timestamp": "2026-07-20T17:01:34.336Z",
+    "timestamp": "2026-07-20T17:20:38.741Z",
     "scanned_count": 3,
     "corrupted_found": 2,
     "fixed_count": 2,
@@ -15,19 +15,21 @@
         "name": "BRCA1 Gene Segment Beta (Corrupted)",
         "status": "fixed",
         "original_corrupted": "ACGTACGTACGGACGT",
-        "fixed_sequence": "ACGTACGTACGTACGT"
+        "fixed_sequence": "ACGTACGTACGTACGT",
+        "method": "triplication_majority_vote"
       },
       {
         "id": "sim_3",
         "name": "BRCA1 Gene Segment Gamma (Corrupted)",
         "status": "fixed",
         "original_corrupted": "ACGTGCGTACGTACGT",
-        "fixed_sequence": "ACGTACGTACGTACGT"
+        "fixed_sequence": "ACGTACGTACGTACGT",
+        "method": "triplication_majority_vote"
       }
     ]
   },
   {
-    "timestamp": "2026-07-20T17:01:34.341Z",
+    "timestamp": "2026-07-20T17:20:38.747Z",
     "scanned_count": 3,
     "corrupted_found": 0,
     "fixed_count": 0,
@@ -50,7 +52,7 @@
     ]
   },
   {
-    "timestamp": "2026-07-20T17:01:34.354Z",
+    "timestamp": "2026-07-20T17:20:38.761Z",
     "scanned_count": 3,
     "corrupted_found": 3,
     "fixed_count": 0,
