@@ -107,58 +107,80 @@ app.post("/dna-encode", (req, res, next) => {
   }
 });
 
-app.post("/dna-encode-file", (req, res, next) => {
-  upload.single("file")(req, res, (err) => {
-    if (err) {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ error: "File too large for current version" });
-      }
-      return next(err);
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded." });
-    }
-
-    try {
-      const encoderV1 = require("./services/DNAEncoderV1Service");
-      const dna = encoderV1.encodeBuffer(req.file.buffer);
-
-      const response = {
-        success: true,
-        filename: req.file.originalname,
-        mimetype: req.file.mimetype,
-        length: dna.length,
-        dna: dna
-      };
-
-      if (dna.length > 1000) {
-        response.preview = dna.slice(0, 1000) + "...";
-      }
-
-      res.json(response);
-    } catch (encodeErr) {
-      next(encodeErr);
-    }
-  });
-});
-
-app.post("/dna-decode-file", (req, res, next) => {
+app.post("/dna-synthesize", (req, res, next) => {
   try {
-    const dna = req.body.dna || req.body.sequence;
-    const filename = req.body.filename || "decoded-file";
-    const mimetype = req.body.mimetype || "application/octet-stream";
+    const inputSeq = req.body.sequence || req.body.dna;
+    const name = req.body.name || req.body.sequenceName || `APEX_SEQ_${Date.now()}`;
 
-    if (!dna) {
-      return res.status(400).json({ error: "Required parameter 'dna' or 'sequence' is missing." });
+    if (!inputSeq || typeof inputSeq !== "string") {
+      return res.status(400).json({ error: "Required parameter 'sequence' or 'dna' is missing or not a string." });
     }
 
-    const encoderV1 = require("./services/DNAEncoderV1Service");
-    const buffer = encoderV1.decodeToBuffer(dna);
+    const rawSeq = inputSeq.replace(/\s/g, "").toUpperCase();
+    if (rawSeq.length === 0) {
+      return res.status(400).json({ error: "DNA sequence cannot be empty." });
+    }
 
-    res.setHeader("Content-Type", mimetype);
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(buffer);
+    if (/[^ACGT]/.test(rawSeq)) {
+      return res.status(400).json({ error: "DNA sequence contains invalid characters. Only A, C, G, T are allowed." });
+    }
+
+    // GC Content %
+    const gcCount = (rawSeq.match(/[GC]/g) || []).length;
+    const gcPercent = ((gcCount / rawSeq.length) * 100).toFixed(2);
+
+    // Homopolymer check status (runs of 4 or more identical consecutive nucleotides)
+    const hasHomopolymer = /([ACGT])\1\1\1/.test(rawSeq);
+    const homopolymerStatus = hasHomopolymer ? "FAIL" : "PASS";
+
+    // Split into chunks if sequence > 200bp
+    const chunks = [];
+    const chunkSize = 200;
+    if (rawSeq.length <= chunkSize) {
+      chunks.push({
+        header: name,
+        seq: rawSeq
+      });
+    } else {
+      for (let i = 0, chunkIdx = 1; i < rawSeq.length; i += chunkSize, chunkIdx++) {
+        chunks.push({
+          header: `${name}_chunk_${chunkIdx}`,
+          seq: rawSeq.slice(i, i + chunkSize)
+        });
+      }
+    }
+
+    // Wrap sequence to 60-70 characters per line (using 60 as standard)
+    const wrapSequence = (seq, length = 60) => {
+      const lines = [];
+      for (let i = 0; i < seq.length; i += length) {
+        lines.push(seq.slice(i, i + length));
+      }
+      return lines.join("\n");
+    };
+
+    // Format FASTA content
+    let fastaLines = [];
+    fastaLines.push(`; APEX DNA Synthesizer Export`);
+    fastaLines.push(`; Sequence Length: ${rawSeq.length} bp`);
+    fastaLines.push(`; GC Content: ${gcPercent}%`);
+    fastaLines.push(`; Homopolymer Check: ${homopolymerStatus}`);
+
+    for (const chunk of chunks) {
+      fastaLines.push(`>${chunk.header}`);
+      fastaLines.push(wrapSequence(chunk.seq, 60));
+    }
+
+    const fastaContent = fastaLines.join("\n") + "\n";
+
+    const safeFileName = name.replace(/[^a-z0-9-_]/gi, "_") || "dna_sequence";
+    res.set({
+      "Content-Type": "text/plain",
+      "Content-Disposition": `attachment; filename="${safeFileName}.fasta"`,
+      "Content-Length": Buffer.byteLength(fastaContent)
+    });
+
+    res.send(fastaContent);
   } catch (error) {
     next(error);
   }

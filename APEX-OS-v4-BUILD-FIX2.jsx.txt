@@ -90,6 +90,16 @@ YOUR EXECUTIVE CAPABILITIES:
 8. Handle crisis management
 9. Forecast growth and revenue
 
+AVAILABLE BACKEND API ENDPOINTS (You must call these endpoints via native function calling/tools to perform real actions):
+- POST /tasks: Creates a new task in the Task Board. Required properties: title, phase. Optional properties: description, column (todo, inprogress, review, done), assignee, priority.
+- PATCH /tasks/:id: Updates an existing task's columns or fields on the Task Board. Required properties: id. Optional properties: column, status, title, description, phase, assignee, priority.
+- POST /simulations: Triggers a new virtual DNA simulation run. Optional properties: name, type, status, progress, estimatedTime.
+- POST /research-reports: Saves a structured scientific research report to persistent storage. Required properties: report object (query, executiveSummary, confidenceScore).
+- GET /simulations: Retrieves the list of all currently active or saved simulations.
+- GET /tasks: Retrieves the list of all currently active or saved tasks.
+
+When the user gives an actionable request (e.g. 'naya DNA algorithm banao aur test karo', 'Test CEO orchestration', etc.), you must understand whether it involves creating tasks on the Task Board, triggering a simulation, or both. You must actually invoke those tools (function calling) instead of just giving a conversational confirmation. Always confirm the execution results to the user once you receive the function response.
+
 COMMAND SYNTAX (use these in responses when needed):
 [TASK:{"title":"...","desc":"...","assignee":"cto|engineer|pm|marketing|hr|finance|sales|support|designer|analyst|researcher|scientist|biologist|architect|ai_eng|data_sci|patent|reviewer","priority":"critical|high|medium|low","due":"YYYY-MM-DD"}]
 [ASSIGN:{"to":"employee_id","task":"specific instruction","context":"background info","deadline":"string"}]
@@ -776,6 +786,16 @@ Recent Decisions:\n${decisions||"None"}
 Goals:\n${goals||"None"}
 Risks:\n${risks||"None"}
 ${context?`\nCONTEXT:\n${context}`:""}
+
+AVAILABLE BACKEND API ENDPOINTS (You must call these endpoints via native function calling/tools to perform real actions):
+- POST /tasks: Creates a new task in the Task Board. Required properties: title, phase. Optional properties: description, column (todo, inprogress, review, done), assignee, priority.
+- PATCH /tasks/:id: Updates an existing task's columns or fields on the Task Board. Required properties: id. Optional properties: column, status, title, description, phase, assignee, priority.
+- POST /simulations: Triggers a new virtual DNA simulation run. Optional properties: name, type, status, progress, estimatedTime.
+- POST /research-reports: Saves a structured scientific research report to persistent storage. Required properties: report object (query, executiveSummary, confidenceScore).
+- GET /simulations: Retrieves the list of all currently active or saved simulations.
+- GET /tasks: Retrieves the list of all currently active or saved tasks.
+
+When the user gives an actionable request (e.g. 'naya DNA algorithm banao aur test karo', 'Test CEO orchestration', etc.), you must understand whether it involves creating tasks on the Task Board, triggering a simulation, or both. You must actually invoke those tools (function calling) instead of just giving a conversational confirmation. Always confirm the execution results to the user once you receive the function response.
 
 COMMAND SYNTAX (embed inline when needed):
 [TASK:{"title":"...","desc":"...","assignee":"cto|engineer|pm|marketing|hr|finance|sales|support|designer|analyst|researcher","priority":"critical|high|medium|low"}]
@@ -3988,7 +4008,7 @@ export default function ApexOS() {
     // BUILD MODE Classification Rule
     let isBuildRequest = false;
     if (!isRealCommand) {
-      if (
+      const hasBuildKeyword =
         normalizedText.includes("create") ||
         normalizedText.includes("build") ||
         normalizedText.includes("improve") ||
@@ -3997,8 +4017,17 @@ export default function ApexOS() {
         normalizedText.includes("generate") ||
         normalizedText.includes("develop") ||
         normalizedText.includes("code") ||
-        normalizedText.includes("ship")
-      ) {
+        normalizedText.includes("ship");
+
+      const isTaskOrSimulation =
+        normalizedText.includes("task") ||
+        normalizedText.includes("tasks") ||
+        normalizedText.includes("simulation") ||
+        normalizedText.includes("simulations") ||
+        normalizedText.includes("report") ||
+        normalizedText.includes("reports");
+
+      if (hasBuildKeyword && !isTaskOrSimulation) {
         isBuildRequest = true;
       }
     }
