@@ -18,6 +18,59 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function runTests() {
   console.log("🚀 Running APEX Gemini Proxy tests...\n");
 
+  const fs = require("fs").promises;
+  const path = require("path");
+
+  // Reset dna-health-logs.json and simulations.json for deterministic testing
+  try {
+    await fs.writeFile(path.join(__dirname, "../dna-health-logs.json"), "[]");
+
+    const initialSimulations = [
+      {
+        "id": "sim_1",
+        "name": "BRCA1 Gene Segment Alpha",
+        "sequence": "ACGTACGTACGTACGT",
+        "checksum": "cf573e65038d08ff910a3345642ffd1e8329844633c2dcb15964b324ebdba4d0",
+        "triplicates": [
+          "ACGTACGTACGTACGT",
+          "ACGTACGTACGTACGT",
+          "ACGTACGTACGTACGT"
+        ],
+        "original": "APEX-OS Block 1",
+        "strategy": "base4"
+      },
+      {
+        "id": "sim_2",
+        "name": "BRCA1 Gene Segment Beta (Corrupted)",
+        "sequence": "ACGTACGTACGGACGT",
+        "checksum": "cf573e65038d08ff910a3345642ffd1e8329844633c2dcb15964b324ebdba4d0",
+        "triplicates": [
+          "ACGTACGTACGTACGT",
+          "ACGTACGTACGTACGT",
+          "ACGTACGTACGGACGT"
+        ],
+        "original": "APEX-OS Block 2",
+        "strategy": "base4"
+      },
+      {
+        "id": "sim_3",
+        "name": "BRCA1 Gene Segment Gamma (Corrupted)",
+        "sequence": "ACGTGCGTACGTACGT",
+        "checksum": "cf573e65038d08ff910a3345642ffd1e8329844633c2dcb15964b324ebdba4d0",
+        "triplicates": [
+          "ACGTACGTACGTACGT",
+          "ACGTGCGTACGTACGT",
+          "ACGTACGTACGTACGT"
+        ],
+        "original": "APEX-OS Block 3",
+        "strategy": "base4"
+      }
+    ];
+    await fs.writeFile(path.join(__dirname, "../simulations.json"), JSON.stringify(initialSimulations, null, 2));
+  } catch (err) {
+    console.warn("Failed to reset simulations/logs files:", err.message);
+  }
+
   try {
     // 1. Test Anthropic to Gemini Content Translation
     console.log("Testing: Anthropic -> Gemini message translation...");
@@ -515,6 +568,51 @@ async function runTests() {
 
     console.log("✅ Passed: Tasks Express Routes integration\n");
 
+    // ── 13. Test DNA Health Check Express Routes ───────────────
+    console.log("Testing: DNA Health Check Express Routes integration...");
+    const BASE_HEALTH_CHECK_URL = `http://localhost:${PORT}/dna-health-check`;
+
+    // A. Run first health check (should find and fix 2 corrupted sequences)
+    console.log("  - POST /dna-health-check (first run - correction expected)");
+    const firstCheckRes = await fetch(BASE_HEALTH_CHECK_URL, { method: "POST" });
+    assert.strictEqual(firstCheckRes.status, 200, "POST /dna-health-check should return 200");
+    const firstCheckData = await firstCheckRes.json();
+
+    assert.strictEqual(firstCheckData.scanned_count, 3, "Scanned count should be 3");
+    assert.strictEqual(firstCheckData.corrupted_found, 2, "Corrupted count should be 2 (sim_2 and sim_3)");
+    assert.strictEqual(firstCheckData.fixed_count, 2, "Fixed count should be 2 (both repaired via majority-vote)");
+    assert.ok(Array.isArray(firstCheckData.details), "Details should be an array");
+
+    const sim1Report = firstCheckData.details.find(d => d.id === "sim_1");
+    assert.strictEqual(sim1Report.status, "healthy");
+
+    const sim2Report = firstCheckData.details.find(d => d.id === "sim_2");
+    assert.strictEqual(sim2Report.status, "fixed");
+    assert.strictEqual(sim2Report.fixed_sequence, "ACGTACGTACGTACGT");
+
+    const sim3Report = firstCheckData.details.find(d => d.id === "sim_3");
+    assert.strictEqual(sim3Report.status, "fixed");
+    assert.strictEqual(sim3Report.fixed_sequence, "ACGTACGTACGTACGT");
+
+    // B. Run second health check (everything should be healthy now)
+    console.log("  - POST /dna-health-check (second run - all healthy expected)");
+    const secondCheckRes = await fetch(BASE_HEALTH_CHECK_URL, { method: "POST" });
+    assert.strictEqual(secondCheckRes.status, 200, "POST /dna-health-check should return 200");
+    const secondCheckData = await secondCheckRes.json();
+
+    assert.strictEqual(secondCheckData.scanned_count, 3);
+    assert.strictEqual(secondCheckData.corrupted_found, 0);
+    assert.strictEqual(secondCheckData.fixed_count, 0);
+
+    // C. Get previous health check runs history
+    console.log("  - GET /dna-health-check/logs (retrieve logs)");
+    const logsRes = await fetch(`${BASE_HEALTH_CHECK_URL}/logs`);
+    assert.strictEqual(logsRes.status, 200, "GET /dna-health-check/logs should return 200");
+    const logsData = await logsRes.json();
+    assert.ok(Array.isArray(logsData), "Logs should be an array");
+    assert.strictEqual(logsData.length, 2, "There should be exactly 2 run history logs recorded");
+
+    console.log("✅ Passed: DNA Health Check Express Routes integration\n");
     // ── 13. Test Simulations Express Routes ────────────────────
     console.log("Testing: Simulations Express Routes integration...");
     const BASE_SIMULATIONS_URL = `http://localhost:${PORT}/simulations`;
