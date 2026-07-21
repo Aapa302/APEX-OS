@@ -2,41 +2,15 @@ const express = require("express");
 const fs = require("fs").promises;
 const path = require("path");
 const crypto = require("crypto");
+const StorageService = require("../services/StorageService");
 const DNAEngineerService = require("../services/DNAEngineerService");
 
 const router = express.Router();
-const SIMULATIONS_FILE = path.join(__dirname, "../../simulations.json");
 const HEALTH_LOGS_FILE = path.join(__dirname, "../../dna-health-logs.json");
 
 // Helper to compute sha256
 function sha256(str) {
   return crypto.createHash("sha256").update(str).digest("hex");
-}
-
-// Helper to load simulations safely
-async function readSimulations() {
-  try {
-    const data = await fs.readFile(SIMULATIONS_FILE, "utf8");
-    try {
-      return JSON.parse(data);
-    } catch (parseErr) {
-      const err = new Error(parseErr.message);
-      err.name = "CorruptedSimulationsError";
-      throw err;
-    }
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  }
-}
-
-// Helper to save simulations safely
-async function writeSimulations(simulations) {
-  const tempPath = SIMULATIONS_FILE + ".tmp";
-  await fs.writeFile(tempPath, JSON.stringify(simulations, null, 2));
-  await fs.rename(tempPath, SIMULATIONS_FILE);
 }
 
 // Helper to load health logs safely
@@ -63,12 +37,20 @@ async function writeHealthLogs(logs) {
 // POST /dna-health-check — runs health check and applies triplication/majority-vote error correction
 router.post("/", async (req, res, next) => {
   try {
-    const simulations = await readSimulations();
+    let simulations;
+    try {
+      simulations = await StorageService.getAll("simulations");
+    } catch (parseErr) {
+      return res.status(422).json({
+        error: "simulations.json is corrupted",
+        details: parseErr.message
+      });
+    }
+
     const scanned_count = simulations.length;
     let corrupted_found = 0;
     let fixed_count = 0;
     const details = [];
-    let fileModified = false;
 
     for (const sim of simulations) {
       const currentSequence = sim.sequence || "";
@@ -121,8 +103,8 @@ router.post("/", async (req, res, next) => {
           if (reconstructedHash === expectedChecksum) {
             sim.sequence = reconstructed;
             fixed_count++;
-            fileModified = true;
             fixed = true;
+            await StorageService.save("simulations", sim);
             details.push({
               id: sim.id,
               name: sim.name,
@@ -155,8 +137,8 @@ router.post("/", async (req, res, next) => {
                   regenerated.sequence
                 ];
                 fixed_count++;
-                fileModified = true;
                 fixed = true;
+                await StorageService.save("simulations", sim);
                 details.push({
                   id: sim.id,
                   name: sim.name,
@@ -192,10 +174,6 @@ router.post("/", async (req, res, next) => {
       }
     }
 
-    if (fileModified) {
-      await writeSimulations(simulations);
-    }
-
     const logEntry = {
       timestamp: new Date().toISOString(),
       scanned_count,
@@ -210,12 +188,6 @@ router.post("/", async (req, res, next) => {
 
     res.json(logEntry);
   } catch (error) {
-    if (error.name === "CorruptedSimulationsError") {
-      return res.status(422).json({
-        error: "simulations.json is corrupted",
-        details: error.message
-      });
-    }
     next(error);
   }
 });

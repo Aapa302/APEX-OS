@@ -1,42 +1,19 @@
 const express = require("express");
-const fs = require("fs").promises;
-const path = require("path");
+const StorageService = require("../services/StorageService");
 
 const router = express.Router();
-const RESEARCH_FILE = path.join(__dirname, "../../research-reports.json");
 
-// Helper to load research reports
-async function readResearchReports() {
-  try {
-    const data = await fs.readFile(RESEARCH_FILE, "utf8");
-    return JSON.parse(data);
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      await fs.writeFile(RESEARCH_FILE, JSON.stringify([], null, 2), "utf8");
-      return [];
-    }
-    throw error;
-  }
-}
-
-// Helper to save research reports atomically
-async function writeResearchReports(reports) {
-  const tempPath = RESEARCH_FILE + ".tmp";
-  await fs.writeFile(tempPath, JSON.stringify(reports, null, 2), "utf8");
-  await fs.rename(tempPath, RESEARCH_FILE);
-}
-
-// GET /api/research-notes - Returns all records from research-reports.json
+// GET /api/research-notes - Returns all records from research_notes collection
 router.get("/", async (req, res, next) => {
   try {
-    const reports = await readResearchReports();
+    const reports = await StorageService.getAll("research_notes");
     res.json(reports);
   } catch (error) {
     next(error);
   }
 });
 
-// POST /api/research-notes - Appends a new record to research-reports.json
+// POST /api/research-notes - Appends a naya record to research_notes collection
 router.post("/", async (req, res, next) => {
   try {
     const { title, category, content } = req.body;
@@ -50,8 +27,6 @@ router.post("/", async (req, res, next) => {
       });
     }
 
-    const reports = await readResearchReports();
-
     // Generate unique ID
     const newId = "note_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 7);
 
@@ -63,8 +38,7 @@ router.post("/", async (req, res, next) => {
       date: new Date().toISOString()
     };
 
-    reports.push(newRecord);
-    await writeResearchReports(reports);
+    await StorageService.save("research_notes", newRecord);
 
     res.status(201).json({
       success: true,
@@ -89,10 +63,8 @@ router.delete("/:id", async (req, res, next) => {
       });
     }
 
-    const reports = await readResearchReports();
-    const index = reports.findIndex(r => r.id === id);
-
-    if (index === -1) {
+    const report = await StorageService.getById("research_notes", id);
+    if (!report) {
       return res.status(404).json({
         error: {
           type: "not_found",
@@ -101,8 +73,7 @@ router.delete("/:id", async (req, res, next) => {
       });
     }
 
-    reports.splice(index, 1);
-    await writeResearchReports(reports);
+    await StorageService.delete("research_notes", id);
 
     res.json({
       success: true,

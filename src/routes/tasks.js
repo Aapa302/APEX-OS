@@ -1,35 +1,12 @@
 const express = require("express");
-const fs = require("fs").promises;
-const path = require("path");
+const StorageService = require("../services/StorageService");
 
 const router = express.Router();
-const TASKS_FILE = path.join(__dirname, "../../tasks.json");
-
-// Helper to load tasks
-async function readTasks() {
-  try {
-    const data = await fs.readFile(TASKS_FILE, "utf8");
-    return JSON.parse(data);
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      await fs.writeFile(TASKS_FILE, JSON.stringify([], null, 2));
-      return [];
-    }
-    throw error;
-  }
-}
-
-// Helper to save tasks
-async function writeTasks(tasks) {
-  const tempPath = TASKS_FILE + ".tmp";
-  await fs.writeFile(tempPath, JSON.stringify(tasks, null, 2));
-  await fs.rename(tempPath, TASKS_FILE);
-}
 
 // GET /tasks — returns all tasks
 router.get("/", async (req, res, next) => {
   try {
-    const tasks = await readTasks();
+    const tasks = await StorageService.getAll("tasks");
     res.json(tasks);
   } catch (error) {
     next(error);
@@ -45,7 +22,7 @@ router.post("/", async (req, res, next) => {
       return res.status(400).json({ error: "Title and Phase are required fields." });
     }
 
-    const tasks = await readTasks();
+    const tasks = await StorageService.getAll("tasks");
 
     // duplicate check: same title + phase already exist na ho
     const duplicate = tasks.some(
@@ -74,8 +51,7 @@ router.post("/", async (req, res, next) => {
       createdAt: new Date().toISOString()
     };
 
-    tasks.push(newTask);
-    await writeTasks(tasks);
+    await StorageService.save("tasks", newTask);
 
     res.status(201).json(newTask);
   } catch (error) {
@@ -89,14 +65,12 @@ router.patch("/:id", async (req, res, next) => {
     const { id } = req.params;
     const { column, status, title, description, phase, assignee, priority } = req.body;
 
-    const tasks = await readTasks();
-    const taskIndex = tasks.findIndex(t => t.id === id);
-
-    if (taskIndex === -1) {
+    const task = await StorageService.getById("tasks", id);
+    if (!task) {
       return res.status(404).json({ error: "Task not found." });
     }
 
-    const task = tasks[taskIndex];
+    const updates = {};
 
     const targetColumn = column || status;
     if (targetColumn) {
@@ -106,21 +80,21 @@ router.patch("/:id", async (req, res, next) => {
         normalized = "inprogress";
       }
       if (validColumns.includes(normalized)) {
-        task.column = normalized;
+        updates.column = normalized;
       } else {
         return res.status(400).json({ error: `Invalid column/status. Must be one of: ${validColumns.join(", ")}` });
       }
     }
 
-    if (title !== undefined) task.title = title.trim();
-    if (description !== undefined) task.description = description.trim();
-    if (phase !== undefined) task.phase = phase.trim();
-    if (assignee !== undefined) task.assignee = assignee.trim();
-    if (priority !== undefined) task.priority = priority.toLowerCase().trim();
+    if (title !== undefined) updates.title = title.trim();
+    if (description !== undefined) updates.description = description.trim();
+    if (phase !== undefined) updates.phase = phase.trim();
+    if (assignee !== undefined) updates.assignee = assignee.trim();
+    if (priority !== undefined) updates.priority = priority.toLowerCase().trim();
 
-    await writeTasks(tasks);
+    const updatedTask = await StorageService.update("tasks", id, updates);
 
-    res.json(task);
+    res.json(updatedTask);
   } catch (error) {
     next(error);
   }
@@ -131,17 +105,14 @@ router.delete("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const tasks = await readTasks();
-    const taskIndex = tasks.findIndex(t => t.id === id);
-
-    if (taskIndex === -1) {
+    const task = await StorageService.getById("tasks", id);
+    if (!task) {
       return res.status(404).json({ error: "Task not found." });
     }
 
-    const deletedTask = tasks.splice(taskIndex, 1)[0];
-    await writeTasks(tasks);
+    await StorageService.delete("tasks", id);
 
-    res.json({ message: "Task deleted successfully.", task: deletedTask });
+    res.json({ message: "Task deleted successfully.", task });
   } catch (error) {
     next(error);
   }

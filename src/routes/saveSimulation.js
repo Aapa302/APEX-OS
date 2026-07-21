@@ -1,9 +1,7 @@
 const express = require("express");
-const fs = require("fs").promises;
-const path = require("path");
+const StorageService = require("../services/StorageService");
 
 const router = express.Router();
-const SIMULATIONS_FILE = path.join(__dirname, "../../simulations.json");
 
 router.post("/", async (req, res, next) => {
   try {
@@ -19,15 +17,7 @@ router.post("/", async (req, res, next) => {
     }
 
     // Read existing simulations
-    let simulations = [];
-    try {
-      const data = await fs.readFile(SIMULATIONS_FILE, "utf8");
-      simulations = JSON.parse(data);
-    } catch (err) {
-      if (err.code !== "ENOENT") {
-        throw err;
-      }
-    }
+    const simulations = await StorageService.getAll("simulations");
 
     // Determine the next numeric ID
     let maxNum = 0;
@@ -52,11 +42,8 @@ router.post("/", async (req, res, next) => {
       strategy: "base4" // Default strategy
     };
 
-    // Append the new record
-    simulations.push(newRecord);
-
-    // Save back to simulations.json
-    await fs.writeFile(SIMULATIONS_FILE, JSON.stringify(simulations, null, 2), "utf8");
+    // Save the new record
+    await StorageService.save("simulations", newRecord);
 
     res.json({
       success: true,
