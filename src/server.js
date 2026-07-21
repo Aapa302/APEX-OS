@@ -35,6 +35,8 @@ const dnaHealthCheckRouter = require("./routes/dnaHealthCheck");
 const dnaSearchRouter = require("./routes/dnaSearch");
 const saveSimulationRouter = require("./routes/saveSimulation");
 const researchNotesRouter = require("./routes/researchNotes");
+const hypothesesRouter = require("./routes/hypotheses");
+const experimentsRouter = require("./routes/experiments");
 const { resolveModel } = require("./services/GeminiModelResolver");
 
 const app = express();
@@ -100,6 +102,8 @@ app.use("/dna-health-check", dnaHealthCheckRouter);
 app.use("/api/search-dna", dnaSearchRouter);
 app.use("/api/save-simulation", saveSimulationRouter);
 app.use("/api/research-notes", researchNotesRouter);
+app.use("/api/hypotheses", hypothesesRouter);
+app.use("/api/experiments", experimentsRouter);
 
 // ── 404 ──────────────────────────────────────────────────────
 app.use(notFoundHandler);
