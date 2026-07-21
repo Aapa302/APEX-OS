@@ -726,6 +726,75 @@ async function runTests() {
 
     console.log("✅ Passed: DNA Search Express Routes integration\n");
 
+    // ── 15. Test Research Notes Express Routes ──────────────────
+    console.log("Testing: Research Notes Express Routes integration...");
+    const BASE_NOTES_URL = `http://localhost:${PORT}/api/research-notes`;
+
+    // A. Read initial notes list
+    console.log("  - GET /api/research-notes (initial count)");
+    const initialNotesRes = await fetch(BASE_NOTES_URL);
+    assert.strictEqual(initialNotesRes.status, 200, "GET /api/research-notes should return 200");
+    const initialNotes = await initialNotesRes.json();
+    assert.ok(Array.isArray(initialNotes), "GET /api/research-notes should return an array");
+    const initialNotesLength = initialNotes.length;
+
+    // B. Create a new research note (POST /api/research-notes)
+    console.log("  - POST /api/research-notes (create note)");
+    const createNoteRes = await fetch(BASE_NOTES_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "Dummy Note Title",
+        category: "Genetics",
+        content: "This is some dummy research content about DNA storage."
+      })
+    });
+    assert.strictEqual(createNoteRes.status, 201, "POST /api/research-notes should return 201 created");
+    const noteData = await createNoteRes.json();
+    assert.strictEqual(noteData.success, true, "Response success should be true");
+    assert.ok(noteData.id, "Created note should have an ID");
+
+    // C. Verify the note list has updated and contains the new note (GET /api/research-notes)
+    console.log("  - GET /api/research-notes (list update)");
+    const updatedNotesRes = await fetch(BASE_NOTES_URL);
+    assert.strictEqual(updatedNotesRes.status, 200, "GET /api/research-notes should return 200");
+    const updatedNotes = await updatedNotesRes.json();
+    assert.strictEqual(updatedNotes.length, initialNotesLength + 1, "Notes list length should increase by 1");
+
+    const foundNote = updatedNotes.find(n => n.id === noteData.id);
+    assert.ok(foundNote, "Created note should exist in retrieved list");
+    assert.strictEqual(foundNote.title, "Dummy Note Title");
+    assert.strictEqual(foundNote.category, "Genetics");
+    assert.strictEqual(foundNote.content, "This is some dummy research content about DNA storage.");
+    assert.ok(foundNote.date, "Created note should have a timestamp date field");
+
+    // D. Delete the created note (DELETE /api/research-notes/:id)
+    console.log(`  - DELETE /api/research-notes/${noteData.id} (delete note)`);
+    const deleteNoteRes = await fetch(`${BASE_NOTES_URL}/${noteData.id}`, {
+      method: "DELETE"
+    });
+    assert.strictEqual(deleteNoteRes.status, 200, "DELETE /api/research-notes/:id should return 200");
+    const deleteNoteData = await deleteNoteRes.json();
+    assert.strictEqual(deleteNoteData.success, true, "Delete response success should be true");
+
+    // E. Verify the note is deleted and list count is reverted (GET /api/research-notes)
+    console.log("  - GET /api/research-notes (verify deletion)");
+    const finalNotesRes = await fetch(BASE_NOTES_URL);
+    assert.strictEqual(finalNotesRes.status, 200, "GET /api/research-notes should return 200");
+    const finalNotes = await finalNotesRes.json();
+    assert.strictEqual(finalNotes.length, initialNotesLength, "Notes length should revert to initial size");
+    const deletedNoteLookup = finalNotes.find(n => n.id === noteData.id);
+    assert.ok(!deletedNoteLookup, "Deleted note should no longer exist in the notes list");
+
+    // F. Verify deleting a non-existent note returns 404 (DELETE /api/research-notes/:id)
+    console.log(`  - DELETE /api/research-notes/${noteData.id} (delete non-existent)`);
+    const deleteNonExistentRes = await fetch(`${BASE_NOTES_URL}/${noteData.id}`, {
+      method: "DELETE"
+    });
+    assert.strictEqual(deleteNonExistentRes.status, 404, "Deleting non-existent note should return 404");
+
+    console.log("✅ Passed: Research Notes Express Routes integration\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
