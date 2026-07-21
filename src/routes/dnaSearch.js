@@ -73,8 +73,7 @@ router.post("/", async (req, res, next) => {
           }
         }
       } else {
-        // Default base4 encoding match
-        // Or generic strategy-based encoding match
+        // Default strategy-based encoding match
         try {
           const encoded = DNAEngineerService.encode(query, strategy);
           if (encoded && encoded.success && encoded.sequence) {
@@ -82,17 +81,37 @@ router.post("/", async (req, res, next) => {
           }
         } catch (encodeErr) {
           // Fallback to base4 encoding
-          const encodedBase4 = DNAEngineerService.encode(query, "base4");
-          if (encodedBase4 && encodedBase4.success && encodedBase4.sequence) {
-            matchPos = sequence.indexOf(encodedBase4.sequence);
+          try {
+            const encodedBase4 = DNAEngineerService.encode(query, "base4");
+            if (encodedBase4 && encodedBase4.success && encodedBase4.sequence) {
+              matchPos = sequence.indexOf(encodedBase4.sequence);
+            }
+          } catch (fbErr) {
+            // Ignore
           }
         }
       }
 
       if (matchPos !== -1) {
+        let full_decoded_context = "";
+        try {
+          const decodeResult = DNAEngineerService.decode(sequence, strategy);
+          if (decodeResult && decodeResult.success) {
+            full_decoded_context = decodeResult.decoded;
+          }
+        } catch (decErr) {
+          // Ignore and use fallback
+        }
+
+        // Fallback to original field if decoded context is empty
+        if (!full_decoded_context && sim.original) {
+          full_decoded_context = sim.original;
+        }
+
         matches.push({
           sequence_id: sim.id,
           position: matchPos,
+          full_decoded_context,
           timestamp: new Date().toISOString()
         });
       }
