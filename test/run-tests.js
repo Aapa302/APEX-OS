@@ -795,6 +795,149 @@ async function runTests() {
 
     console.log("✅ Passed: Research Notes Express Routes integration\n");
 
+    // ── 16. Test Hypotheses Express Routes ──────────────────────
+    console.log("Testing: Hypotheses Express Routes integration...");
+    const BASE_HYP_URL = `http://localhost:${PORT}/api/hypotheses`;
+
+    // A. Read initial hypotheses
+    console.log("  - GET /api/hypotheses (initial count)");
+    const initialHypRes = await fetch(BASE_HYP_URL);
+    assert.strictEqual(initialHypRes.status, 200);
+    const initialHyp = await initialHypRes.json();
+    assert.ok(Array.isArray(initialHyp));
+    const initialHypLength = initialHyp.length;
+
+    // B. Create a new hypothesis
+    console.log("  - POST /api/hypotheses (create hypothesis)");
+    const createHypRes = await fetch(BASE_HYP_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        statement: "Base-4 has better density than homopolymer-safe encoding",
+        status: "Pending",
+        confidence: "Medium",
+        category: "Density Analysis",
+        evidence: "Preliminary math calculation"
+      })
+    });
+    assert.strictEqual(createHypRes.status, 201);
+    const hypData = await createHypRes.json();
+    assert.strictEqual(hypData.success, true);
+    assert.ok(hypData.id);
+
+    // C. Update status/confidence via PATCH
+    console.log(`  - PATCH /api/hypotheses/${hypData.id} (update hypothesis)`);
+    const patchHypRes = await fetch(`${BASE_HYP_URL}/${hypData.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "Approved",
+        confidence: "High"
+      })
+    });
+    assert.strictEqual(patchHypRes.status, 200);
+    const patchedHypData = await patchHypRes.json();
+    assert.strictEqual(patchedHypData.success, true);
+    assert.strictEqual(patchedHypData.record.status, "Approved");
+    assert.strictEqual(patchedHypData.record.confidence, "High");
+
+    // D. Verify update via GET
+    console.log("  - GET /api/hypotheses (verify update)");
+    const getHypRes = await fetch(BASE_HYP_URL);
+    const getHypList = await getHypRes.json();
+    const updatedHyp = getHypList.find(h => h.id === hypData.id);
+    assert.ok(updatedHyp);
+    assert.strictEqual(updatedHyp.status, "Approved");
+    assert.strictEqual(updatedHyp.confidence, "High");
+
+    // E. Delete hypothesis
+    console.log(`  - DELETE /api/hypotheses/${hypData.id} (delete hypothesis)`);
+    const deleteHypRes = await fetch(`${BASE_HYP_URL}/${hypData.id}`, {
+      method: "DELETE"
+    });
+    assert.strictEqual(deleteHypRes.status, 200);
+    const deleteHypData = await deleteHypRes.json();
+    assert.strictEqual(deleteHypData.success, true);
+
+    // F. Verify deleted hypothesis is gone
+    const finalHypRes = await fetch(BASE_HYP_URL);
+    const finalHyp = await finalHypRes.json();
+    assert.strictEqual(finalHyp.length, initialHypLength);
+    assert.ok(!finalHyp.find(h => h.id === hypData.id));
+
+    console.log("✅ Passed: Hypotheses Express Routes integration\n");
+
+
+    // ── 17. Test Experiments Express Routes ──────────────────────
+    console.log("Testing: Experiments Express Routes integration...");
+    const BASE_EXP_URL = `http://localhost:${PORT}/api/experiments`;
+
+    // A. Read initial experiments
+    console.log("  - GET /api/experiments (initial count)");
+    const initialExpRes = await fetch(BASE_EXP_URL);
+    assert.strictEqual(initialExpRes.status, 200);
+    const initialExp = await initialExpRes.json();
+    assert.ok(Array.isArray(initialExp));
+    const initialExpLength = initialExp.length;
+
+    // B. Create a new experiment
+    console.log("  - POST /api/experiments (create experiment)");
+    const createExpRes = await fetch(BASE_EXP_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        hypothesis: "Virtual DNA Lab Simulation: Illumina",
+        accuracy: "99.5%",
+        results: "No errors in 1000 trials"
+      })
+    });
+    assert.strictEqual(createExpRes.status, 201);
+    const expData = await createExpRes.json();
+    assert.strictEqual(expData.success, true);
+    assert.ok(expData.id);
+
+    // C. Update fields via PATCH
+    console.log(`  - PATCH /api/experiments/${expData.id} (update experiment)`);
+    const patchExpRes = await fetch(`${BASE_EXP_URL}/${expData.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accuracy: "99.9%",
+        results: "Perfect resolution achieved"
+      })
+    });
+    assert.strictEqual(patchExpRes.status, 200);
+    const patchedExpData = await patchExpRes.json();
+    assert.strictEqual(patchedExpData.success, true);
+    assert.strictEqual(patchedExpData.record.accuracy, "99.9%");
+    assert.strictEqual(patchedExpData.record.results, "Perfect resolution achieved");
+
+    // D. Verify update via GET
+    console.log("  - GET /api/experiments (verify update)");
+    const getExpRes = await fetch(BASE_EXP_URL);
+    const getExpList = await getExpRes.json();
+    const updatedExp = getExpList.find(e => e.id === expData.id);
+    assert.ok(updatedExp);
+    assert.strictEqual(updatedExp.accuracy, "99.9%");
+    assert.strictEqual(updatedExp.results, "Perfect resolution achieved");
+
+    // E. Delete experiment
+    console.log(`  - DELETE /api/experiments/${expData.id} (delete experiment)`);
+    const deleteExpRes = await fetch(`${BASE_EXP_URL}/${expData.id}`, {
+      method: "DELETE"
+    });
+    assert.strictEqual(deleteExpRes.status, 200);
+    const deleteExpData = await deleteExpRes.json();
+    assert.strictEqual(deleteExpData.success, true);
+
+    // F. Verify deleted experiment is gone
+    const finalExpRes = await fetch(BASE_EXP_URL);
+    const finalExp = await finalExpRes.json();
+    assert.strictEqual(finalExp.length, initialExpLength);
+    assert.ok(!finalExp.find(e => e.id === expData.id));
+
+    console.log("✅ Passed: Experiments Express Routes integration\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
