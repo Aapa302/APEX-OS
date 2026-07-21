@@ -1,35 +1,12 @@
 const express = require("express");
-const fs = require("fs").promises;
-const path = require("path");
+const StorageService = require("../services/StorageService");
 
 const router = express.Router();
-const HYPOTHESES_FILE = path.join(__dirname, "../../hypotheses.json");
-
-// Helper to load hypotheses
-async function readHypotheses() {
-  try {
-    const data = await fs.readFile(HYPOTHESES_FILE, "utf8");
-    return JSON.parse(data);
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      await fs.writeFile(HYPOTHESES_FILE, JSON.stringify([], null, 2), "utf8");
-      return [];
-    }
-    throw error;
-  }
-}
-
-// Helper to save hypotheses atomically
-async function writeHypotheses(data) {
-  const tempPath = HYPOTHESES_FILE + ".tmp";
-  await fs.writeFile(tempPath, JSON.stringify(data, null, 2), "utf8");
-  await fs.rename(tempPath, HYPOTHESES_FILE);
-}
 
 // GET /api/hypotheses
 router.get("/", async (req, res, next) => {
   try {
-    const list = await readHypotheses();
+    const list = await StorageService.getAll("hypotheses");
     res.json(list);
   } catch (error) {
     next(error);
@@ -47,8 +24,6 @@ router.post("/", async (req, res, next) => {
       });
     }
 
-    const list = await readHypotheses();
-
     const newId = "hyp_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 7);
     const newRecord = {
       id: newId,
@@ -60,8 +35,7 @@ router.post("/", async (req, res, next) => {
       date: new Date().toISOString()
     };
 
-    list.push(newRecord);
-    await writeHypotheses(list);
+    await StorageService.save("hypotheses", newRecord);
 
     res.status(201).json({
       success: true,
@@ -79,24 +53,21 @@ router.patch("/:id", async (req, res, next) => {
     const { id } = req.params;
     const { status, confidence, statement, category, evidence } = req.body;
 
-    const list = await readHypotheses();
-    const index = list.findIndex(h => h.id === id);
-
-    if (index === -1) {
+    const hypothesis = await StorageService.getById("hypotheses", id);
+    if (!hypothesis) {
       return res.status(404).json({
         error: `Hypothesis with id '${id}' not found.`
       });
     }
 
-    const record = list[index];
+    const updates = {};
+    if (status !== undefined) updates.status = String(status).trim();
+    if (confidence !== undefined) updates.confidence = String(confidence).trim();
+    if (statement !== undefined) updates.statement = String(statement).trim();
+    if (category !== undefined) updates.category = String(category).trim();
+    if (evidence !== undefined) updates.evidence = String(evidence).trim();
 
-    if (status !== undefined) record.status = String(status).trim();
-    if (confidence !== undefined) record.confidence = String(confidence).trim();
-    if (statement !== undefined) record.statement = String(statement).trim();
-    if (category !== undefined) record.category = String(category).trim();
-    if (evidence !== undefined) record.evidence = String(evidence).trim();
-
-    await writeHypotheses(list);
+    const record = await StorageService.update("hypotheses", id, updates);
 
     res.json({
       success: true,
@@ -112,17 +83,14 @@ router.delete("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const list = await readHypotheses();
-    const index = list.findIndex(h => h.id === id);
-
-    if (index === -1) {
+    const hypothesis = await StorageService.getById("hypotheses", id);
+    if (!hypothesis) {
       return res.status(404).json({
         error: `Hypothesis with id '${id}' not found.`
       });
     }
 
-    list.splice(index, 1);
-    await writeHypotheses(list);
+    await StorageService.delete("hypotheses", id);
 
     res.json({
       success: true,

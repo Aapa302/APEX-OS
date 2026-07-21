@@ -1,10 +1,8 @@
 const express = require("express");
-const fs = require("fs").promises;
-const path = require("path");
+const StorageService = require("../services/StorageService");
 const DNAEngineerService = require("../services/DNAEngineerService");
 
 const router = express.Router();
-const SIMULATIONS_FILE = path.join(__dirname, "../../simulations.json");
 
 // Helper to convert string to bits
 function stringToBits(str) {
@@ -31,15 +29,7 @@ router.post("/", async (req, res, next) => {
     }
 
     // Read simulations
-    let simulations = [];
-    try {
-      const data = await fs.readFile(SIMULATIONS_FILE, "utf8");
-      simulations = JSON.parse(data);
-    } catch (err) {
-      if (err.code !== "ENOENT") {
-        throw err;
-      }
-    }
+    const simulations = await StorageService.getAll("simulations");
 
     const matches = [];
 
