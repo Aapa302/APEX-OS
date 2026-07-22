@@ -7,13 +7,24 @@ router.post("/", async (req, res, next) => {
   try {
     const { name, sequence, checksum } = req.body;
 
-    if (!name || typeof name !== "string" || !sequence || typeof sequence !== "string" || !checksum || typeof checksum !== "string") {
+    // Validate mandatory parameters (sequence and checksum)
+    if (!sequence || typeof sequence !== "string" || !checksum || typeof checksum !== "string") {
       return res.status(400).json({
         error: {
           type: "invalid_request",
-          message: "Missing or invalid required parameters: 'name', 'sequence', and 'checksum' must be non-empty strings."
+          message: "Missing or invalid required parameters: 'sequence' and 'checksum' must be non-empty strings."
         }
       });
+    }
+
+    // Resolve name: prioritize user-entered name if present, fallback to auto-generated SEQ_ timestamp name
+    let finalName = name;
+    if (!finalName || typeof finalName !== "string" || finalName.trim() === "") {
+      finalName = `SEQ_${Date.now()}`;
+      console.log(`[Save Simulation] Name field is blank or missing. Falling back to auto-generated name: "${finalName}"`);
+    } else {
+      finalName = finalName.trim();
+      console.log(`[Save Simulation] Using user-provided custom name: "${finalName}"`);
     }
 
     // Read existing simulations
@@ -31,15 +42,27 @@ router.post("/", async (req, res, next) => {
     }
     const newId = `sim_${maxNum + 1}`;
 
+    // Safely resolve Firestore FieldValue if available
+    let FieldValue;
+    try {
+      FieldValue = require("firebase-admin/firestore").FieldValue;
+    } catch (e) {
+      // Ignore
+    }
+    const timestampValue = (FieldValue && FieldValue.serverTimestamp)
+      ? FieldValue.serverTimestamp()
+      : new Date().toISOString();
+
     // Create the new simulation record
     const newRecord = {
       id: newId,
-      name,
+      name: finalName,
       sequence,
       checksum,
       triplicates: [sequence, sequence, sequence], // Standard triplicates
       original: "", // Can be filled or left empty
-      strategy: "base4" // Default strategy
+      strategy: "base4", // Default strategy
+      timestamp: timestampValue
     };
 
     // Save the new record
