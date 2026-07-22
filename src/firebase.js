@@ -55,18 +55,19 @@ if (envVar) {
     const credentialObj = cert(serviceAccount);
 
     // Initialize Admin SDK with service account credentials
-    initializeApp({
+    const app = initializeApp({
       credential: credentialObj
     });
 
+    const targetDbId = "default";
     if (typeof getFirestore === "function") {
-      console.log("[Firebase] [DEBUG-LOG] Initializing Firestore via resolved getFirestore().");
-      db = getFirestore();
+      console.log(`[Firebase] [DEBUG-LOG] Initializing Firestore via resolved getFirestore() targeting database ID: "${targetDbId}".`);
+      db = getFirestore(app, targetDbId);
     } else {
       throw new Error("Unable to resolve Firebase Admin getFirestore helper.");
     }
 
-    console.log("[Firebase] Successfully connected to Firestore database.");
+    console.log(`[Firebase] Successfully connected to Firestore database. Database ID: "${targetDbId}".`);
   } catch (error) {
     console.error("[Firebase] Error parsing or initializing Firebase Admin SDK:", error.message);
     console.error("[Firebase] Full initialization error stack:", error);
