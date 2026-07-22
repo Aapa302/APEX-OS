@@ -1,4 +1,20 @@
-const admin = require("firebase-admin");
+let initializeApp, cert, getFirestore;
+
+try {
+  // Try modern modular imports (firebase-admin v10+)
+  const appModule = require("firebase-admin/app");
+  const firestoreModule = require("firebase-admin/firestore");
+  initializeApp = appModule.initializeApp;
+  cert = appModule.cert;
+  getFirestore = firestoreModule.getFirestore;
+  console.log("[Firebase] [DEBUG-LOG] Successfully resolved firebase-admin modular imports (app & firestore).");
+} catch (e) {
+  console.warn("[Firebase] [DEBUG-LOG] Modular imports failed, falling back to legacy firebase-admin namespace import:", e.message);
+  const admin = require("firebase-admin");
+  initializeApp = admin.initializeApp;
+  cert = admin.cert || (admin.credential && admin.credential.cert);
+  getFirestore = admin.firestore;
+}
 
 let db = null;
 
@@ -25,11 +41,31 @@ if (envVar) {
       console.log("[Firebase] [DEBUG-LOG] WARNING: serviceAccount is parsed but does not contain a 'private_key' field.");
     }
 
+    console.log(`[Firebase] [DEBUG-LOG] typeof initializeApp: ${typeof initializeApp}`);
+    console.log(`[Firebase] [DEBUG-LOG] typeof cert: ${typeof cert}`);
+    console.log(`[Firebase] [DEBUG-LOG] typeof getFirestore: ${typeof getFirestore}`);
+
+    if (!cert || typeof cert !== "function") {
+      throw new Error("Unable to resolve Firebase Admin credential cert helper.");
+    }
+    if (!initializeApp || typeof initializeApp !== "function") {
+      throw new Error("Unable to resolve Firebase Admin initializeApp helper.");
+    }
+
+    const credentialObj = cert(serviceAccount);
+
     // Initialize Admin SDK with service account credentials
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+    initializeApp({
+      credential: credentialObj
     });
-    db = admin.firestore();
+
+    if (typeof getFirestore === "function") {
+      console.log("[Firebase] [DEBUG-LOG] Initializing Firestore via resolved getFirestore().");
+      db = getFirestore();
+    } else {
+      throw new Error("Unable to resolve Firebase Admin getFirestore helper.");
+    }
+
     console.log("[Firebase] Successfully connected to Firestore database.");
   } catch (error) {
     console.error("[Firebase] Error parsing or initializing Firebase Admin SDK:", error.message);
