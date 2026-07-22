@@ -5,6 +5,8 @@ const router = express.Router();
 
 router.post("/", async (req, res, next) => {
   try {
+    console.log(`[Save Simulation] [DEBUG-LOG] Received request body name field: "${req.body.name}"`, typeof req.body.name);
+    console.log(`[Save Simulation] [DEBUG-LOG] Full incoming request body:`, JSON.stringify(req.body));
     const { name, sequence, checksum } = req.body;
 
     // Validate mandatory parameters (sequence and checksum)
