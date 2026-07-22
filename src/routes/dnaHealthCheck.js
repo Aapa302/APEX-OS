@@ -57,17 +57,26 @@ router.post("/", async (req, res, next) => {
       const expectedChecksum = sim.checksum || "";
       const currentHash = sha256(currentSequence);
 
-      if (expectedChecksum && currentHash === expectedChecksum) {
+      // 1. Run checksum verification first to detect if block is corrupted.
+      const isCorrupted = !expectedChecksum || (currentHash !== expectedChecksum);
+
+      if (!isCorrupted) {
+        // Block is valid and healthy.
         details.push({
           id: sim.id,
           name: sim.name,
-          status: "healthy"
+          status: "healthy",
+          recovery_status: "Healthy"
         });
       } else {
+        // Block is corrupted.
         corrupted_found++;
         let fixed = false;
+        let finalSequence = currentSequence;
+        let recoveryMethod = "";
 
-        // 1. Error-correction step A: Triplication / majority-vote (Index-by-index recovery)
+        // 2. For each corrupted block, attempt automatic error correction.
+        // Step A: Triplication / majority-vote restore.
         const triplicates = sim.triplicates;
         if (expectedChecksum && triplicates && Array.isArray(triplicates) && triplicates.length >= 3) {
           const seq1 = triplicates[0] || "";
@@ -99,32 +108,29 @@ router.post("/", async (req, res, next) => {
             reconstructed += majorityChar;
           }
 
+          // 3. After correction, re-run checksum verification on the corrected block to confirm it's now valid.
           const reconstructedHash = sha256(reconstructed);
           if (reconstructedHash === expectedChecksum) {
             sim.sequence = reconstructed;
             fixed_count++;
             fixed = true;
+            finalSequence = reconstructed;
+            recoveryMethod = "triplication_majority_vote";
             await StorageService.save("simulations", sim);
-            details.push({
-              id: sim.id,
-              name: sim.name,
-              status: "fixed",
-              original_corrupted: currentSequence,
-              fixed_sequence: reconstructed,
-              method: "triplication_majority_vote"
-            });
             console.log(`[DNA Health Check] Successfully repaired simulation ${sim.id} via character majority-vote.`);
           } else {
             console.warn(`[DNA Health Check] Character majority-vote failed for simulation ${sim.id}: Reconstructed sequence did not match expected checksum.`);
           }
         }
 
-        // 2. Error-correction step B (Fallback): Re-encode from original backup copy / redundant data
+        // Step B (Fallback): Re-encode from original backup copy / redundant data.
         if (!fixed && sim.original) {
           try {
             const regenerated = DNAEngineerService.encode(sim.original, sim.strategy || "base4");
             if (regenerated && regenerated.success && regenerated.sequence) {
               const targetChecksum = expectedChecksum || regenerated.hash;
+
+              // 3. Re-run checksum verification on the corrected block.
               if (sha256(regenerated.sequence) === targetChecksum) {
                 sim.sequence = regenerated.sequence;
                 if (!sim.checksum) {
@@ -138,15 +144,9 @@ router.post("/", async (req, res, next) => {
                 ];
                 fixed_count++;
                 fixed = true;
+                finalSequence = regenerated.sequence;
+                recoveryMethod = "original_payload_reencoding";
                 await StorageService.save("simulations", sim);
-                details.push({
-                  id: sim.id,
-                  name: sim.name,
-                  status: "fixed",
-                  original_corrupted: currentSequence,
-                  fixed_sequence: regenerated.sequence,
-                  method: "original_payload_reencoding"
-                });
                 console.log(`[DNA Health Check] Successfully self-healed simulation ${sim.id} by re-encoding original redundant backup copy.`);
               }
             }
@@ -155,8 +155,18 @@ router.post("/", async (req, res, next) => {
           }
         }
 
-        // 3. If both recovery steps failed to repair the corruption
-        if (!fixed) {
+        // 4. Only after this full cycle, show ONE final, clear status per block.
+        if (fixed) {
+          details.push({
+            id: sim.id,
+            name: sim.name,
+            status: "fixed",
+            recovery_status: "Fully Recovered",
+            original_corrupted: currentSequence,
+            fixed_sequence: finalSequence,
+            method: recoveryMethod
+          });
+        } else {
           let reason = "unable to fix - legacy format";
           if (expectedChecksum && triplicates && Array.isArray(triplicates) && triplicates.length >= 3) {
             reason = "unable to fix - majority-voted sequence hash mismatch";
@@ -167,6 +177,7 @@ router.post("/", async (req, res, next) => {
             corrupted_id: sim.id,
             name: sim.name,
             status: "corrupted_unfixable",
+            recovery_status: "Unrecoverable",
             reason: reason
           });
           console.error(`[DNA Health Check] Simulation ${sim.id} is corrupted and unfixable (${reason}).`);
