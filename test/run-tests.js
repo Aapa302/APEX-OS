@@ -938,6 +938,31 @@ async function runTests() {
 
     console.log("✅ Passed: Experiments Express Routes integration\n");
 
+    // ── 18. Test Debug List Simulations Express Route ─────────────
+    console.log("Testing: Debug List Simulations Express Route...");
+    const BASE_DEBUG_URL = `http://localhost:${PORT}/api/debug/list-simulations`;
+
+    const debugRes = await fetch(BASE_DEBUG_URL);
+    assert.strictEqual(debugRes.status, 200, "Debug endpoint should return 200");
+    const debugData = await debugRes.json();
+    assert.ok(Array.isArray(debugData), "Debug endpoint should return a JSON array");
+
+    // Check that each object in the array only contains id, name, and timestamp fields
+    for (const sim of debugData) {
+      const keys = Object.keys(sim);
+      assert.ok(keys.includes("id"), "Simulation should include 'id'");
+      assert.ok(keys.includes("name"), "Simulation should include 'name'");
+      assert.ok(keys.includes("timestamp"), "Simulation should include 'timestamp'");
+      // Ensure other fields like 'sequence', 'checksum', 'triplicates', 'original', 'strategy' are NOT included
+      assert.ok(!keys.includes("sequence"), "Simulation should NOT include 'sequence'");
+      assert.ok(!keys.includes("checksum"), "Simulation should NOT include 'checksum'");
+      assert.ok(!keys.includes("triplicates"), "Simulation should NOT include 'triplicates'");
+      assert.ok(!keys.includes("original"), "Simulation should NOT include 'original'");
+      assert.ok(!keys.includes("strategy"), "Simulation should NOT include 'strategy'");
+    }
+
+    console.log("✅ Passed: Debug List Simulations Express Route\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
