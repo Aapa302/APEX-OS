@@ -90,13 +90,18 @@ const StorageService = {
     }
     if (this.isFirestoreEnabled()) {
       try {
+        console.log(`[StorageService] [DEBUG-LOG] Attempting Firestore write to collection: "${collectionName}" with document ID: "${item.id}"`);
+        console.log(`[StorageService] [DEBUG-LOG] Document data payload:`, JSON.stringify(item));
         await db.collection(collectionName).doc(item.id).set(item);
+        console.log(`[StorageService] [DEBUG-LOG] Successfully wrote document "${item.id}" to collection "${collectionName}" in Firestore.`);
         return item;
       } catch (error) {
         console.error(`[Firestore] Error saving to ${collectionName}, falling back:`, error.message);
+        console.error(`[Firestore] Full Error stack during Firestore write:`, error);
         return await this.saveLocal(collectionName, item);
       }
     } else {
+      console.log(`[StorageService] [DEBUG-LOG] Firestore is not enabled. Saving locally to JSON for collection: "${collectionName}".`);
       return await this.saveLocal(collectionName, item);
     }
   },
