@@ -317,15 +317,29 @@ router.get("/auto-scan", async (req, res, next) => {
 
         if (!fixed) {
           unrecoverable_count++;
-          details.push({
-            id: simId,
-            corrupted_id: simId,
-            name: simName,
-            status: "corrupted_unfixable",
-            recovery_status: "Unrecoverable",
-            reason: "Unrecoverable - manual review needed"
-          });
-          console.error(`[Auto self-healing] Simulation ${simId} is corrupted and unfixable (Unrecoverable - manual review needed).`);
+          // If expectedChecksum is legacy (64-char hex) or missing, map to legacy_unverified
+          const isLegacy = !expectedChecksum || (expectedChecksum.length === 64 && /^[0-9a-fA-F]+$/.test(expectedChecksum));
+          if (isLegacy) {
+            details.push({
+              id: simId,
+              corrupted_id: simId,
+              name: simName,
+              status: "legacy_unverified",
+              recovery_status: "Legacy Unverified",
+              reason: "legacy checksum format - unverified"
+            });
+            console.log(`[Auto self-healing] Simulation ${simId} has legacy/missing checksum, mapped to legacy_unverified.`);
+          } else {
+            details.push({
+              id: simId,
+              corrupted_id: simId,
+              name: simName,
+              status: "corrupted_unfixable",
+              recovery_status: "Unrecoverable",
+              reason: "Unrecoverable - manual review needed"
+            });
+            console.error(`[Auto self-healing] Simulation ${simId} is corrupted and unfixable (Unrecoverable - manual review needed).`);
+          }
         }
       }
     }

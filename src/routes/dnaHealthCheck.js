@@ -308,15 +308,29 @@ router.post("/", async (req, res, next) => {
             reason = "unable to fix - majority-voted sequence hash mismatch";
           }
 
-          details.push({
-            id: simId,
-            corrupted_id: simId,
-            name: simName,
-            status: "corrupted_unfixable",
-            recovery_status: "Unrecoverable",
-            reason: reason
-          });
-          console.error(`[DNA Health Check] Simulation ${simId} is corrupted and unfixable (${reason}).`);
+          // If expectedChecksum is legacy (64-char hex) or missing, map to legacy_unverified
+          const isLegacy = !expectedChecksum || (expectedChecksum.length === 64 && /^[0-9a-fA-F]+$/.test(expectedChecksum));
+          if (isLegacy) {
+            details.push({
+              id: simId,
+              corrupted_id: simId,
+              name: simName,
+              status: "legacy_unverified",
+              recovery_status: "Legacy Unverified",
+              reason: "legacy checksum format - unverified"
+            });
+            console.log(`[DNA Health Check] Simulation ${simId} has legacy/missing checksum, mapped to legacy_unverified.`);
+          } else {
+            details.push({
+              id: simId,
+              corrupted_id: simId,
+              name: simName,
+              status: "corrupted_unfixable",
+              recovery_status: "Unrecoverable",
+              reason: reason
+            });
+            console.error(`[DNA Health Check] Simulation ${simId} is corrupted and unfixable (${reason}).`);
+          }
         }
       }
     }

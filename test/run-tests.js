@@ -673,19 +673,19 @@ async function runTests() {
       assert.strictEqual(legacyData.fixed_count, 0);
 
       const r1 = legacyData.details.find(d => d.id === "sim_legacy_1");
-      assert.strictEqual(r1.status, "corrupted_unfixable");
+      assert.strictEqual(r1.status, "legacy_unverified");
       assert.strictEqual(r1.corrupted_id, "sim_legacy_1");
-      assert.strictEqual(r1.reason, "unable to fix - legacy format");
+      assert.strictEqual(r1.reason, "legacy checksum format - unverified");
 
       const r2 = legacyData.details.find(d => d.id === "sim_legacy_2");
-      assert.strictEqual(r2.status, "corrupted_unfixable");
+      assert.strictEqual(r2.status, "legacy_unverified");
       assert.strictEqual(r2.corrupted_id, "sim_legacy_2");
-      assert.strictEqual(r2.reason, "unable to fix - legacy format");
+      assert.strictEqual(r2.reason, "legacy checksum format - unverified");
 
       const r3 = legacyData.details.find(d => d.id === "sim_legacy_3");
-      assert.strictEqual(r3.status, "corrupted_unfixable");
+      assert.strictEqual(r3.status, "legacy_unverified");
       assert.strictEqual(r3.corrupted_id, "sim_legacy_3");
-      assert.strictEqual(r3.reason, "unable to fix - majority-voted sequence hash mismatch");
+      assert.strictEqual(r3.reason, "legacy checksum format - unverified");
 
       console.log("    ✓ Successfully verified unfixable reasons and corrupted_id responses");
     } finally {
