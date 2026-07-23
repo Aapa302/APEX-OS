@@ -1,13 +1,26 @@
 const express = require("express");
 const StorageService = require("../services/StorageService");
+const { verifyFirebaseToken } = require("../middleware/auth");
 
 const router = express.Router();
+
+// Require auth for all research notes routes
+router.use(verifyFirebaseToken);
 
 // GET /api/research-notes - Returns all records from research_notes collection
 router.get("/", async (req, res, next) => {
   try {
     const reports = await StorageService.getAll("research_notes");
-    res.json(reports);
+
+    // Filter research notes: user's own notes OR legacy/unassigned documents
+    const filtered = reports.map(r => {
+      if (!r.userId) {
+        return { ...r, userId: "legacy/unassigned" };
+      }
+      return r;
+    }).filter(r => r.userId === req.userId || r.userId === "legacy/unassigned");
+
+    res.json(filtered);
   } catch (error) {
     next(error);
   }
@@ -35,6 +48,7 @@ router.post("/", async (req, res, next) => {
       title: title.trim(),
       category: category.trim(),
       content: content.trim(),
+      userId: req.userId, // Save userId
       date: new Date().toISOString()
     };
 
@@ -69,6 +83,16 @@ router.delete("/:id", async (req, res, next) => {
         error: {
           type: "not_found",
           message: `Research note with id '${id}' not found.`
+        }
+      });
+    }
+
+    // Check ownership (allow if same user or legacy document)
+    if (report.userId && report.userId !== req.userId) {
+      return res.status(403).json({
+        error: {
+          type: "forbidden",
+          message: "You do not have permission to modify or delete this document."
         }
       });
     }

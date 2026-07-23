@@ -18,6 +18,19 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function runTests() {
   console.log("🚀 Running APEX Gemini Proxy tests...\n");
 
+  // Intercept global fetch to automatically append mock Firebase ID Token Bearer auth headers
+  const originalFetch = global.fetch;
+  global.fetch = async (url, options = {}) => {
+    if (typeof url === "string" && url.startsWith("http://localhost")) {
+      options.headers = options.headers || {};
+      options.headers = {
+        ...options.headers,
+        "Authorization": options.headers["Authorization"] || "Bearer mock-test-token"
+      };
+    }
+    return originalFetch(url, options);
+  };
+
   const fs = require("fs").promises;
   const path = require("path");
 

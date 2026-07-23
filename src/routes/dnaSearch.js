@@ -1,8 +1,12 @@
 const express = require("express");
 const StorageService = require("../services/StorageService");
 const DNAEngineerService = require("../services/DNAEngineerService");
+const { verifyFirebaseToken } = require("../middleware/auth");
 
 const router = express.Router();
+
+// Require auth
+router.use(verifyFirebaseToken);
 
 // Helper to convert string to bits
 function stringToBits(str) {
@@ -29,7 +33,10 @@ router.post("/", async (req, res, next) => {
     }
 
     // Read simulations
-    const simulations = await StorageService.getAll("simulations");
+    const allSimulations = await StorageService.getAll("simulations");
+
+    // Filter simulations for User-based Data Isolation
+    const simulations = allSimulations.filter(sim => !sim.userId || sim.userId === req.userId);
 
     const matches = [];
 

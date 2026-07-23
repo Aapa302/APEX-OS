@@ -1,5 +1,6 @@
 const express = require("express");
 const StorageService = require("../services/StorageService");
+const { verifyFirebaseToken } = require("../middleware/auth");
 
 const router = express.Router();
 
@@ -27,6 +28,9 @@ function getCleanSequence(currentSequence) {
   }
   return rawSeq.toUpperCase();
 }
+
+// Require Firebase token verification
+router.use(verifyFirebaseToken);
 
 router.post("/", async (req, res, next) => {
   try {
@@ -93,6 +97,7 @@ router.post("/", async (req, res, next) => {
       triplicates: [sequence, sequence, sequence], // Standard triplicates
       original: "", // Can be filled or left empty
       strategy: "base4", // Default strategy
+      userId: req.userId, // Save the userId of creator
       timestamp: timestampValue
     };
 

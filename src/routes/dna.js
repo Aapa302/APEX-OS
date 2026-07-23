@@ -6,8 +6,12 @@
 const express = require("express");
 const DNAEngineerService = require("../services/DNAEngineerService");
 const { logger } = require("../middleware/logger");
+const { verifyFirebaseToken } = require("../middleware/auth");
 
 const router = express.Router();
+
+// Require auth for all DNA lab routes
+router.use(verifyFirebaseToken);
 
 // ── POST /api/dna/encode ────────────────────────────────────
 router.post("/encode", (req, res, next) => {
