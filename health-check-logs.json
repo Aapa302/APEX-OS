@@ -1,7 +1,7 @@
 [
   {
-    "id": "log_1784792919965",
-    "timestamp": "2026-07-23T07:48:39.966Z",
+    "id": "log_1784797898928",
+    "timestamp": "2026-07-23T09:11:38.928Z",
     "scanned_count": 3,
     "corrupted_found": 0,
     "fixed_count": 0,
@@ -10,74 +10,6 @@
       {
         "id": "sim_1",
         "name": "BRCA1 Gene Segment Alpha",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_2",
-        "name": "BRCA1 Gene Segment Beta (Corrupted)",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_3",
-        "name": "BRCA1 Gene Segment Gamma (Corrupted)",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      }
-    ]
-  },
-  {
-    "id": "log_1784793933156",
-    "timestamp": "2026-07-23T08:05:33.156Z",
-    "scanned_count": 4,
-    "corrupted_found": 0,
-    "fixed_count": 0,
-    "unrecoverable_count": 0,
-    "details": [
-      {
-        "id": "sim_1",
-        "name": "BRCA1 Gene Segment Alpha",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_12",
-        "name": "BRCA1 Gene Segment Lambda (CRC32 Checksum)",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_2",
-        "name": "BRCA1 Gene Segment Beta (Corrupted)",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_3",
-        "name": "BRCA1 Gene Segment Gamma (Corrupted)",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      }
-    ]
-  },
-  {
-    "id": "log_1784794289492",
-    "timestamp": "2026-07-23T08:11:29.492Z",
-    "scanned_count": 4,
-    "corrupted_found": 0,
-    "fixed_count": 0,
-    "unrecoverable_count": 0,
-    "details": [
-      {
-        "id": "sim_1",
-        "name": "BRCA1 Gene Segment Alpha",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_12",
-        "name": "BRCA1 Gene Segment Lambda (CRC32 Checksum)",
         "status": "healthy",
         "recovery_status": "Healthy"
       },

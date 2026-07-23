@@ -13,19 +13,6 @@
     "strategy": "base4"
   },
   {
-    "id": "sim_12",
-    "name": "BRCA1 Gene Segment Lambda (CRC32 Checksum)",
-    "sequence": "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
-    "checksum": "3892138544",
-    "triplicates": [
-      "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
-      "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
-      "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC"
-    ],
-    "original": "APEX-OS Block 12",
-    "strategy": "base4"
-  },
-  {
     "id": "sim_2",
     "name": "BRCA1 Gene Segment Beta (Corrupted)",
     "sequence": "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAG",
