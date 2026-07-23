@@ -137,7 +137,7 @@ router.post("/", async (req, res, next) => {
         let recoveryMethod = "";
 
         // 2. For each corrupted block, attempt automatic error correction.
-        // Step A: Triplication / majority-vote restore.
+        // Step A1: Parallel triplicates majority-vote restore.
         const triplicates = sim.triplicates || sim.triplicate || [];
         if (expectedChecksum && triplicates && Array.isArray(triplicates) && triplicates.length >= 3) {
           const seq1 = triplicates[0] || "";
@@ -178,9 +178,61 @@ router.post("/", async (req, res, next) => {
             finalSequence = reconstructed;
             recoveryMethod = "triplication_majority_vote";
             await StorageService.save("simulations", sim);
-            console.log(`[DNA Health Check] Successfully repaired simulation ${simId} via character majority-vote.`);
+            console.log(`[DNA Health Check] Successfully repaired simulation ${simId} via parallel character majority-vote.`);
           } else {
             console.warn(`[DNA Health Check] Character majority-vote failed for simulation ${simId}: Reconstructed sequence did not match expected checksum.`);
+          }
+        }
+
+        // Step A2: Inline triplication majority-vote restore.
+        if (!fixed && currentSequence) {
+          let reconstructedRepeated = "";
+          let reconstructedSingle = "";
+          for (let i = 0; i < currentSequence.length; i += 3) {
+            const chunk = currentSequence.slice(i, i + 3);
+            const char1 = chunk[0] || "";
+            const char2 = chunk[1] || "";
+            const char3 = chunk[2] || "";
+
+            const counts = {};
+            if (char1) counts[char1] = (counts[char1] || 0) + 1;
+            if (char2) counts[char2] = (counts[char2] || 0) + 1;
+            if (char3) counts[char3] = (counts[char3] || 0) + 1;
+
+            let majorityChar = "";
+            let maxCount = 0;
+            for (const [char, count] of Object.entries(counts)) {
+              if (count > maxCount) {
+                maxCount = count;
+                majorityChar = char;
+              }
+            }
+            if (majorityChar) {
+              reconstructedRepeated += majorityChar + majorityChar + majorityChar;
+              reconstructedSingle += majorityChar;
+            }
+          }
+
+          const tempSimRepeated = { ...sim, sequence: reconstructedRepeated };
+          if (reconstructedRepeated && verifySimulationChecksum(tempSimRepeated)) {
+            sim.sequence = reconstructedRepeated;
+            fixed_count++;
+            fixed = true;
+            finalSequence = reconstructedRepeated;
+            recoveryMethod = "inline_triplication_majority_vote";
+            await StorageService.save("simulations", sim);
+            console.log(`[DNA Health Check] Successfully repaired simulation ${simId} via inline character majority-vote (repeated).`);
+          } else {
+            const tempSimSingle = { ...sim, sequence: reconstructedSingle };
+            if (reconstructedSingle && verifySimulationChecksum(tempSimSingle)) {
+              sim.sequence = reconstructedSingle;
+              fixed_count++;
+              fixed = true;
+              finalSequence = reconstructedSingle;
+              recoveryMethod = "inline_triplication_majority_vote_single";
+              await StorageService.save("simulations", sim);
+              console.log(`[DNA Health Check] Successfully repaired simulation ${simId} via inline character majority-vote (single).`);
+            }
           }
         }
 
