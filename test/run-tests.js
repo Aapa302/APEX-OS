@@ -695,6 +695,29 @@ async function runTests() {
 
     console.log("✅ Passed: DNA Health Check Express Routes integration\n");
 
+    // ── 13b. Test DNA Health Auto Scan Express Route ───────────
+    console.log("Testing: DNA Health Auto Scan Express Route integration...");
+    const BASE_AUTO_SCAN_URL = `http://localhost:${PORT}/api/dna-health/auto-scan`;
+
+    const autoScanRes = await fetch(BASE_AUTO_SCAN_URL);
+    assert.strictEqual(autoScanRes.status, 200, "GET /api/dna-health/auto-scan should return 200");
+    const autoScanData = await autoScanRes.json();
+    assert.strictEqual(autoScanData.success, true, "Response should indicate success");
+    assert.ok(autoScanData.scanned_count >= 3, "Should scan at least 3 simulation blocks");
+    assert.ok(autoScanData.details.length >= 3, "Details should list statuses for each sequence");
+
+    const healthyBlock = autoScanData.details.find(d => d.id === "sim_1");
+    assert.strictEqual(healthyBlock.status, "healthy", "sim_1 should be healthy");
+    assert.strictEqual(healthyBlock.recovery_status, "Healthy", "sim_1 recovery status should be Healthy");
+
+    const repairedBlock = autoScanData.details.find(d => d.id === "sim_2" || d.id === "sim_3");
+    if (repairedBlock) {
+      assert.ok(["healthy", "fixed"].includes(repairedBlock.status), "Corrupted block should be fixed or healthy");
+      assert.ok(["Healthy", "Fully Recovered"].includes(repairedBlock.recovery_status), "Corrupted block recovery status should be Fully Recovered or Healthy");
+    }
+
+    console.log("✅ Passed: DNA Health Auto Scan Express Route integration\n");
+
     // ── 14. Test DNA Search Express Routes ─────────────────────
     console.log("Testing: DNA Search Express Routes integration...");
     const BASE_SEARCH_DNA_URL = `http://localhost:${PORT}/api/search-dna`;
