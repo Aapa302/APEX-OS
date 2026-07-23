@@ -66,7 +66,8 @@ function verifySimulationChecksum(sim) {
   // Case 1: Checksum is the SHA-256 or CRC32 of the raw DNA sequence itself
   const rawSeqHash = sha256(rawSeq);
   const rawSeqCrc = crc32(rawSeq);
-  if (rawSeqHash === expectedChecksum || rawSeqCrc === expectedChecksum) {
+  console.log(`[Case 1 Checksum Log] Calculated SHA256: "${rawSeqHash}" (type: ${typeof rawSeqHash}), Calculated CRC32: "${rawSeqCrc}" (type: ${typeof rawSeqCrc}), Expected: "${expectedChecksum}" (type: ${typeof expectedChecksum})`);
+  if (String(rawSeqHash) === String(expectedChecksum) || String(rawSeqCrc) === String(expectedChecksum)) {
     return true;
   }
 
@@ -80,7 +81,8 @@ function verifySimulationChecksum(sim) {
     if (decodeResult && decodeResult.success && decodeResult.decoded) {
       const decodedHash = sha256(decodeResult.decoded);
       const decodedCrc = crc32(decodeResult.decoded);
-      if (decodedHash === expectedChecksum || decodedCrc === expectedChecksum) {
+      console.log(`[Case 2 Checksum Log] Decoded text: "${decodeResult.decoded}", Calculated SHA256: "${decodedHash}" (type: ${typeof decodedHash}), Calculated CRC32: "${decodedCrc}" (type: ${typeof decodedCrc}), Expected: "${expectedChecksum}" (type: ${typeof expectedChecksum})`);
+      if (String(decodedHash) === String(expectedChecksum) || String(decodedCrc) === String(expectedChecksum)) {
         return true;
       }
     }
@@ -93,7 +95,8 @@ function verifySimulationChecksum(sim) {
   if (originalPayload) {
     const originalHash = sha256(originalPayload);
     const originalCrc = crc32(originalPayload);
-    if (originalHash === expectedChecksum || originalCrc === expectedChecksum) {
+    console.log(`[Case 3 Checksum Log] Original payload: "${originalPayload}", Calculated SHA256: "${originalHash}" (type: ${typeof originalHash}), Calculated CRC32: "${originalCrc}" (type: ${typeof originalCrc}), Expected: "${expectedChecksum}" (type: ${typeof expectedChecksum})`);
+    if (String(originalHash) === String(expectedChecksum) || String(originalCrc) === String(expectedChecksum)) {
       // Decode and check if it matches original
       try {
         const fastaForDecode = currentSequence.trim().startsWith(">")

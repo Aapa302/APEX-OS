@@ -1,19 +1,13 @@
 [
   {
-    "timestamp": "2026-07-23T08:11:29.472Z",
-    "scanned_count": 4,
+    "timestamp": "2026-07-23T09:11:38.906Z",
+    "scanned_count": 3,
     "corrupted_found": 2,
     "fixed_count": 2,
     "details": [
       {
         "id": "sim_1",
         "name": "BRCA1 Gene Segment Alpha",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_12",
-        "name": "BRCA1 Gene Segment Lambda (CRC32 Checksum)",
         "status": "healthy",
         "recovery_status": "Healthy"
       },
@@ -38,20 +32,14 @@
     ]
   },
   {
-    "timestamp": "2026-07-23T08:11:29.477Z",
-    "scanned_count": 4,
+    "timestamp": "2026-07-23T09:11:38.910Z",
+    "scanned_count": 3,
     "corrupted_found": 0,
     "fixed_count": 0,
     "details": [
       {
         "id": "sim_1",
         "name": "BRCA1 Gene Segment Alpha",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_12",
-        "name": "BRCA1 Gene Segment Lambda (CRC32 Checksum)",
         "status": "healthy",
         "recovery_status": "Healthy"
       },
@@ -70,7 +58,7 @@
     ]
   },
   {
-    "timestamp": "2026-07-23T08:11:29.486Z",
+    "timestamp": "2026-07-23T09:11:38.922Z",
     "scanned_count": 3,
     "corrupted_found": 3,
     "fixed_count": 0,
