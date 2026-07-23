@@ -12,8 +12,8 @@ function sha256(str) {
 
 // Robust multi-case checksum verification helper
 function verifySimulationChecksum(sim) {
-  const currentSequence = sim.sequence || "";
-  const expectedChecksum = sim.checksum || "";
+  const currentSequence = sim.sequence || sim.seq || sim.dna || "";
+  const expectedChecksum = sim.checksum || sim.hash || sim.expectedHash || "";
   if (!expectedChecksum) return false;
 
   // Clean raw nucleotide sequence
@@ -50,8 +50,9 @@ function verifySimulationChecksum(sim) {
   }
 
   // Case 3: Checksum matches the original payload field
-  if (sim.original) {
-    const originalHash = sha256(sim.original);
+  const originalPayload = sim.original || sim.payload || "";
+  if (originalPayload) {
+    const originalHash = sha256(originalPayload);
     if (originalHash === expectedChecksum) {
       // Decode and check if it matches original
       try {
@@ -59,7 +60,7 @@ function verifySimulationChecksum(sim) {
           ? currentSequence
           : `>APEX_DNA_BLOCK|STRATEGY:${sim.strategy || "base4"}|HASH:${expectedChecksum}\n${rawSeq}\n`;
         const decodeResult = DNAEngineerService.decode(fastaForDecode);
-        if (decodeResult && decodeResult.success && decodeResult.decoded === sim.original) {
+        if (decodeResult && decodeResult.success && decodeResult.decoded === originalPayload) {
           return true;
         }
       } catch (err) {}
@@ -82,6 +83,12 @@ router.get("/auto-scan", async (req, res, next) => {
       });
     }
 
+    // Verbose debug log raw simulations array
+    console.log(`[Auto self-healing DEBUG-LOG] TOTAL SIMULATIONS RETRIEVED: ${simulations.length}`);
+    if (simulations.length > 0) {
+      console.log("[Auto self-healing DEBUG-LOG] FIRST DOC RAW CONTENT:", JSON.stringify(simulations[0], null, 2));
+    }
+
     const scanned_count = simulations.length;
     let corrupted_found = 0;
     let fixed_count = 0;
@@ -89,8 +96,10 @@ router.get("/auto-scan", async (req, res, next) => {
     const details = [];
 
     for (const sim of simulations) {
-      const currentSequence = sim.sequence || "";
-      const expectedChecksum = sim.checksum || "";
+      const simId = sim.id || "";
+      const simName = sim.name || sim.title || "";
+      const currentSequence = sim.sequence || sim.seq || sim.dna || "";
+      const expectedChecksum = sim.checksum || sim.hash || sim.expectedHash || "";
 
       // 1. Run checksum verification first to detect if block is corrupted.
       const isCorrupted = !verifySimulationChecksum(sim);
@@ -98,8 +107,8 @@ router.get("/auto-scan", async (req, res, next) => {
       if (!isCorrupted) {
         // Block is valid and healthy
         details.push({
-          id: sim.id,
-          name: sim.name,
+          id: simId,
+          name: simName,
           status: "healthy",
           recovery_status: "Healthy"
         });
@@ -109,7 +118,7 @@ router.get("/auto-scan", async (req, res, next) => {
         let finalSequence = currentSequence;
 
         // Try automatic error correction using majority-vote logic on triplicates
-        const triplicates = sim.triplicates;
+        const triplicates = sim.triplicates || sim.triplicate || [];
         if (expectedChecksum && triplicates && Array.isArray(triplicates) && triplicates.length >= 3) {
           const seq1 = triplicates[0] || "";
           const seq2 = triplicates[1] || "";
@@ -144,15 +153,15 @@ router.get("/auto-scan", async (req, res, next) => {
           const tempSim = { ...sim, sequence: reconstructed };
           if (verifySimulationChecksum(tempSim)) {
             // Backup the original corrupted version first
-            const backupId = `corr_${sim.id}_${Date.now()}`;
+            const backupId = `corr_${simId}_${Date.now()}`;
             const backupRecord = {
               id: backupId,
-              original_id: sim.id,
-              name: sim.name,
+              original_id: simId,
+              name: simName,
               sequence: currentSequence,
               checksum: expectedChecksum,
               triplicates: [...triplicates],
-              original: sim.original || "",
+              original: sim.original || sim.payload || "",
               strategy: sim.strategy || "base4",
               timestamp: new Date().toISOString()
             };
@@ -167,31 +176,31 @@ router.get("/auto-scan", async (req, res, next) => {
             finalSequence = reconstructed;
 
             details.push({
-              id: sim.id,
-              name: sim.name,
+              id: simId,
+              name: simName,
               status: "fixed",
               recovery_status: "Fully Recovered",
               original_corrupted: currentSequence,
               fixed_sequence: reconstructed,
               method: "triplication_majority_vote"
             });
-            console.log(`[Auto self-healing] Successfully repaired simulation ${sim.id} via character majority-vote.`);
+            console.log(`[Auto self-healing] Successfully repaired simulation ${simId} via character majority-vote.`);
           } else {
-            console.warn(`[Auto self-healing] Character majority-vote failed for simulation ${sim.id}: Reconstructed sequence did not match expected checksum.`);
+            console.warn(`[Auto self-healing] Character majority-vote failed for simulation ${simId}: Reconstructed sequence did not match expected checksum.`);
           }
         }
 
         if (!fixed) {
           unrecoverable_count++;
           details.push({
-            id: sim.id,
-            corrupted_id: sim.id,
-            name: sim.name,
+            id: simId,
+            corrupted_id: simId,
+            name: simName,
             status: "corrupted_unfixable",
             recovery_status: "Unrecoverable",
             reason: "Unrecoverable - manual review needed"
           });
-          console.error(`[Auto self-healing] Simulation ${sim.id} is corrupted and unfixable (Unrecoverable - manual review needed).`);
+          console.error(`[Auto self-healing] Simulation ${simId} is corrupted and unfixable (Unrecoverable - manual review needed).`);
         }
       }
     }

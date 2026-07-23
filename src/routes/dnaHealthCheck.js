@@ -36,8 +36,8 @@ async function writeHealthLogs(logs) {
 
 // Robust multi-case checksum verification helper
 function verifySimulationChecksum(sim) {
-  const currentSequence = sim.sequence || "";
-  const expectedChecksum = sim.checksum || "";
+  const currentSequence = sim.sequence || sim.seq || sim.dna || "";
+  const expectedChecksum = sim.checksum || sim.hash || sim.expectedHash || "";
   if (!expectedChecksum) return false;
 
   // Clean raw nucleotide sequence
@@ -74,8 +74,9 @@ function verifySimulationChecksum(sim) {
   }
 
   // Case 3: Checksum matches the original payload field
-  if (sim.original) {
-    const originalHash = sha256(sim.original);
+  const originalPayload = sim.original || sim.payload || "";
+  if (originalPayload) {
+    const originalHash = sha256(originalPayload);
     if (originalHash === expectedChecksum) {
       // Decode and check if it matches original
       try {
@@ -83,7 +84,7 @@ function verifySimulationChecksum(sim) {
           ? currentSequence
           : `>APEX_DNA_BLOCK|STRATEGY:${sim.strategy || "base4"}|HASH:${expectedChecksum}\n${rawSeq}\n`;
         const decodeResult = DNAEngineerService.decode(fastaForDecode);
-        if (decodeResult && decodeResult.success && decodeResult.decoded === sim.original) {
+        if (decodeResult && decodeResult.success && decodeResult.decoded === originalPayload) {
           return true;
         }
       } catch (err) {}
@@ -112,8 +113,10 @@ router.post("/", async (req, res, next) => {
     const details = [];
 
     for (const sim of simulations) {
-      const currentSequence = sim.sequence || "";
-      const expectedChecksum = sim.checksum || "";
+      const simId = sim.id || "";
+      const simName = sim.name || sim.title || "";
+      const currentSequence = sim.sequence || sim.seq || sim.dna || "";
+      const expectedChecksum = sim.checksum || sim.hash || sim.expectedHash || "";
 
       // 1. Run checksum verification first to detect if block is corrupted.
       const isCorrupted = !verifySimulationChecksum(sim);
@@ -121,8 +124,8 @@ router.post("/", async (req, res, next) => {
       if (!isCorrupted) {
         // Block is valid and healthy.
         details.push({
-          id: sim.id,
-          name: sim.name,
+          id: simId,
+          name: simName,
           status: "healthy",
           recovery_status: "Healthy"
         });
@@ -135,7 +138,7 @@ router.post("/", async (req, res, next) => {
 
         // 2. For each corrupted block, attempt automatic error correction.
         // Step A: Triplication / majority-vote restore.
-        const triplicates = sim.triplicates;
+        const triplicates = sim.triplicates || sim.triplicate || [];
         if (expectedChecksum && triplicates && Array.isArray(triplicates) && triplicates.length >= 3) {
           const seq1 = triplicates[0] || "";
           const seq2 = triplicates[1] || "";
@@ -175,16 +178,17 @@ router.post("/", async (req, res, next) => {
             finalSequence = reconstructed;
             recoveryMethod = "triplication_majority_vote";
             await StorageService.save("simulations", sim);
-            console.log(`[DNA Health Check] Successfully repaired simulation ${sim.id} via character majority-vote.`);
+            console.log(`[DNA Health Check] Successfully repaired simulation ${simId} via character majority-vote.`);
           } else {
-            console.warn(`[DNA Health Check] Character majority-vote failed for simulation ${sim.id}: Reconstructed sequence did not match expected checksum.`);
+            console.warn(`[DNA Health Check] Character majority-vote failed for simulation ${simId}: Reconstructed sequence did not match expected checksum.`);
           }
         }
 
         // Step B (Fallback): Re-encode from original backup copy / redundant data.
-        if (!fixed && sim.original) {
+        const originalPayload = sim.original || sim.payload || "";
+        if (!fixed && originalPayload) {
           try {
-            const regenerated = DNAEngineerService.encode(sim.original, sim.strategy || "base4");
+            const regenerated = DNAEngineerService.encode(originalPayload, sim.strategy || "base4");
             if (regenerated && regenerated.success && regenerated.sequence) {
               const tempSim = { ...sim, sequence: regenerated.sequence };
               if (!tempSim.checksum) {
@@ -208,19 +212,19 @@ router.post("/", async (req, res, next) => {
                 finalSequence = regenerated.sequence;
                 recoveryMethod = "original_payload_reencoding";
                 await StorageService.save("simulations", sim);
-                console.log(`[DNA Health Check] Successfully self-healed simulation ${sim.id} by re-encoding original redundant backup copy.`);
+                console.log(`[DNA Health Check] Successfully self-healed simulation ${simId} by re-encoding original redundant backup copy.`);
               }
             }
           } catch (encodeErr) {
-            console.error(`[DNA Health Check] Fallback repair failed for simulation ${sim.id}:`, encodeErr.message);
+            console.error(`[DNA Health Check] Fallback repair failed for simulation ${simId}:`, encodeErr.message);
           }
         }
 
         // 4. Only after this full cycle, show ONE final, clear status per block.
         if (fixed) {
           details.push({
-            id: sim.id,
-            name: sim.name,
+            id: simId,
+            name: simName,
             status: "fixed",
             recovery_status: "Fully Recovered",
             original_corrupted: currentSequence,
@@ -234,14 +238,14 @@ router.post("/", async (req, res, next) => {
           }
 
           details.push({
-            id: sim.id,
-            corrupted_id: sim.id,
-            name: sim.name,
+            id: simId,
+            corrupted_id: simId,
+            name: simName,
             status: "corrupted_unfixable",
             recovery_status: "Unrecoverable",
             reason: reason
           });
-          console.error(`[DNA Health Check] Simulation ${sim.id} is corrupted and unfixable (${reason}).`);
+          console.error(`[DNA Health Check] Simulation ${simId} is corrupted and unfixable (${reason}).`);
         }
       }
     }
