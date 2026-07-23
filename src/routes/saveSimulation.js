@@ -3,21 +3,50 @@ const StorageService = require("../services/StorageService");
 
 const router = express.Router();
 
+// Helper to compute crc32
+function crc32(str) {
+  const bytes = Buffer.from(str, "utf8");
+  let crc = ~0;
+  for (let i = 0; i < bytes.length; i++) {
+    crc ^= bytes[i];
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1));
+    }
+  }
+  return ((~crc) >>> 0).toString();
+}
+
+// Clean raw nucleotide sequence
+function getCleanSequence(currentSequence) {
+  let rawSeq = currentSequence.trim();
+  if (rawSeq.startsWith(">")) {
+    const lines = rawSeq.split("\n");
+    rawSeq = lines.slice(1).join("").replace(/[^ACGTacgt]/g, "");
+  } else {
+    rawSeq = rawSeq.replace(/[^ACGTacgt]/g, "");
+  }
+  return rawSeq.toUpperCase();
+}
+
 router.post("/", async (req, res, next) => {
   try {
     console.log(`[Save Simulation] [DEBUG-LOG] Received request body name field: "${req.body.name}"`, typeof req.body.name);
     console.log(`[Save Simulation] [DEBUG-LOG] Full incoming request body:`, JSON.stringify(req.body));
-    const { name, sequence, checksum } = req.body;
+    const { name, sequence } = req.body;
 
-    // Validate mandatory parameters (sequence and checksum)
-    if (!sequence || typeof sequence !== "string" || !checksum || typeof checksum !== "string") {
+    // Validate mandatory parameters (sequence)
+    if (!sequence || typeof sequence !== "string") {
       return res.status(400).json({
         error: {
           type: "invalid_request",
-          message: "Missing or invalid required parameters: 'sequence' and 'checksum' must be non-empty strings."
+          message: "Missing or invalid required parameters: 'sequence' must be a non-empty string."
         }
       });
     }
+
+    // Backend automatically computes the CRC32 checksum over the cleaned raw sequence
+    const cleanedSeq = getCleanSequence(sequence);
+    const calculatedChecksum = crc32(cleanedSeq);
 
     // Resolve name: prioritize user-entered name if present, fallback to auto-generated SEQ_ timestamp name
     let finalName = name;
@@ -60,7 +89,7 @@ router.post("/", async (req, res, next) => {
       id: newId,
       name: finalName,
       sequence,
-      checksum,
+      checksum: calculatedChecksum,
       triplicates: [sequence, sequence, sequence], // Standard triplicates
       original: "", // Can be filled or left empty
       strategy: "base4", // Default strategy
@@ -72,7 +101,8 @@ router.post("/", async (req, res, next) => {
 
     res.json({
       success: true,
-      id: newId
+      id: newId,
+      checksum: calculatedChecksum
     });
   } catch (error) {
     next(error);
