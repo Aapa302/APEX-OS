@@ -40,6 +40,19 @@ async function runTests() {
         "strategy": "base4"
       },
       {
+        "id": "sim_12",
+        "name": "BRCA1 Gene Segment Lambda (CRC32 Checksum)",
+        "sequence": "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
+        "checksum": "3892138544",
+        "triplicates": [
+          "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
+          "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
+          "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC"
+        ],
+        "original": "APEX-OS Block 12",
+        "strategy": "base4"
+      },
+      {
         "id": "sim_2",
         "name": "BRCA1 Gene Segment Beta (Corrupted)",
         "sequence": "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
@@ -578,13 +591,16 @@ async function runTests() {
     assert.strictEqual(firstCheckRes.status, 200, "POST /dna-health-check should return 200");
     const firstCheckData = await firstCheckRes.json();
 
-    assert.strictEqual(firstCheckData.scanned_count, 3, "Scanned count should be 3");
+    assert.strictEqual(firstCheckData.scanned_count, 4, "Scanned count should be 4");
     assert.strictEqual(firstCheckData.corrupted_found, 2, "Corrupted count should be 2 (sim_2 and sim_3)");
     assert.strictEqual(firstCheckData.fixed_count, 2, "Fixed count should be 2 (both repaired via majority-vote)");
     assert.ok(Array.isArray(firstCheckData.details), "Details should be an array");
 
     const sim1Report = firstCheckData.details.find(d => d.id === "sim_1");
     assert.strictEqual(sim1Report.status, "healthy");
+
+    const sim12Report = firstCheckData.details.find(d => d.id === "sim_12");
+    assert.strictEqual(sim12Report.status, "healthy", "sim_12 (CRC32 checksum) should be verified as healthy");
 
     const sim2Report = firstCheckData.details.find(d => d.id === "sim_2");
     assert.strictEqual(sim2Report.status, "fixed");
@@ -600,7 +616,7 @@ async function runTests() {
     assert.strictEqual(secondCheckRes.status, 200, "POST /dna-health-check should return 200");
     const secondCheckData = await secondCheckRes.json();
 
-    assert.strictEqual(secondCheckData.scanned_count, 3);
+    assert.strictEqual(secondCheckData.scanned_count, 4);
     assert.strictEqual(secondCheckData.corrupted_found, 0);
     assert.strictEqual(secondCheckData.fixed_count, 0);
 
@@ -703,12 +719,16 @@ async function runTests() {
     assert.strictEqual(autoScanRes.status, 200, "GET /api/dna-health/auto-scan should return 200");
     const autoScanData = await autoScanRes.json();
     assert.strictEqual(autoScanData.success, true, "Response should indicate success");
-    assert.ok(autoScanData.scanned_count >= 3, "Should scan at least 3 simulation blocks");
-    assert.ok(autoScanData.details.length >= 3, "Details should list statuses for each sequence");
+    assert.ok(autoScanData.scanned_count >= 4, "Should scan at least 4 simulation blocks");
+    assert.ok(autoScanData.details.length >= 4, "Details should list statuses for each sequence");
 
     const healthyBlock = autoScanData.details.find(d => d.id === "sim_1");
     assert.strictEqual(healthyBlock.status, "healthy", "sim_1 should be healthy");
     assert.strictEqual(healthyBlock.recovery_status, "Healthy", "sim_1 recovery status should be Healthy");
+
+    const healthyBlock12 = autoScanData.details.find(d => d.id === "sim_12");
+    assert.strictEqual(healthyBlock12.status, "healthy", "sim_12 should be healthy");
+    assert.strictEqual(healthyBlock12.recovery_status, "Healthy", "sim_12 recovery status should be Healthy");
 
     const repairedBlock = autoScanData.details.find(d => d.id === "sim_2" || d.id === "sim_3");
     if (repairedBlock) {

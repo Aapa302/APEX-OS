@@ -13,6 +13,19 @@ function sha256(str) {
   return crypto.createHash("sha256").update(str).digest("hex");
 }
 
+// Helper to compute crc32
+function crc32(str) {
+  const bytes = Buffer.from(str, "utf8");
+  let crc = ~0;
+  for (let i = 0; i < bytes.length; i++) {
+    crc ^= bytes[i];
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1));
+    }
+  }
+  return ((~crc) >>> 0).toString();
+}
+
 // Helper to load health logs safely
 async function readHealthLogs() {
   try {
@@ -50,13 +63,14 @@ function verifySimulationChecksum(sim) {
   }
   rawSeq = rawSeq.toUpperCase();
 
-  // Case 1: Checksum is the SHA-256 of the raw DNA sequence itself
+  // Case 1: Checksum is the SHA-256 or CRC32 of the raw DNA sequence itself
   const rawSeqHash = sha256(rawSeq);
-  if (rawSeqHash === expectedChecksum) {
+  const rawSeqCrc = crc32(rawSeq);
+  if (rawSeqHash === expectedChecksum || rawSeqCrc === expectedChecksum) {
     return true;
   }
 
-  // Case 2: Checksum is the SHA-256 of the decoded original payload
+  // Case 2: Checksum is the SHA-256 or CRC32 of the decoded original payload
   try {
     const fastaForDecode = currentSequence.trim().startsWith(">")
       ? currentSequence
@@ -65,7 +79,8 @@ function verifySimulationChecksum(sim) {
     const decodeResult = DNAEngineerService.decode(fastaForDecode);
     if (decodeResult && decodeResult.success && decodeResult.decoded) {
       const decodedHash = sha256(decodeResult.decoded);
-      if (decodedHash === expectedChecksum) {
+      const decodedCrc = crc32(decodeResult.decoded);
+      if (decodedHash === expectedChecksum || decodedCrc === expectedChecksum) {
         return true;
       }
     }
@@ -73,11 +88,12 @@ function verifySimulationChecksum(sim) {
     // Ignore and try fallback
   }
 
-  // Case 3: Checksum matches the original payload field
+  // Case 3: Checksum matches the original payload field (using SHA-256 or CRC32)
   const originalPayload = sim.original || sim.payload || "";
   if (originalPayload) {
     const originalHash = sha256(originalPayload);
-    if (originalHash === expectedChecksum) {
+    const originalCrc = crc32(originalPayload);
+    if (originalHash === expectedChecksum || originalCrc === expectedChecksum) {
       // Decode and check if it matches original
       try {
         const fastaForDecode = currentSequence.trim().startsWith(">")
