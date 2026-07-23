@@ -116,6 +116,7 @@ router.get("/auto-scan", async (req, res, next) => {
         corrupted_found++;
         let fixed = false;
         let finalSequence = currentSequence;
+        let recoveryMethod = "";
 
         // Try automatic error correction using majority-vote logic on triplicates
         const triplicates = sim.triplicates || sim.triplicate || [];
@@ -174,6 +175,7 @@ router.get("/auto-scan", async (req, res, next) => {
             fixed_count++;
             fixed = true;
             finalSequence = reconstructed;
+            recoveryMethod = "triplication_majority_vote";
 
             details.push({
               id: simId,
@@ -187,6 +189,110 @@ router.get("/auto-scan", async (req, res, next) => {
             console.log(`[Auto self-healing] Successfully repaired simulation ${simId} via character majority-vote.`);
           } else {
             console.warn(`[Auto self-healing] Character majority-vote failed for simulation ${simId}: Reconstructed sequence did not match expected checksum.`);
+          }
+        }
+
+        // Try inline triplication majority-vote restore
+        if (!fixed && currentSequence) {
+          let reconstructedRepeated = "";
+          let reconstructedSingle = "";
+          for (let i = 0; i < currentSequence.length; i += 3) {
+            const chunk = currentSequence.slice(i, i + 3);
+            const char1 = chunk[0] || "";
+            const char2 = chunk[1] || "";
+            const char3 = chunk[2] || "";
+
+            const counts = {};
+            if (char1) counts[char1] = (counts[char1] || 0) + 1;
+            if (char2) counts[char2] = (counts[char2] || 0) + 1;
+            if (char3) counts[char3] = (counts[char3] || 0) + 1;
+
+            let majorityChar = "";
+            let maxCount = 0;
+            for (const [char, count] of Object.entries(counts)) {
+              if (count > maxCount) {
+                maxCount = count;
+                majorityChar = char;
+              }
+            }
+            if (majorityChar) {
+              reconstructedRepeated += majorityChar + majorityChar + majorityChar;
+              reconstructedSingle += majorityChar;
+            }
+          }
+
+          const tempSimRepeated = { ...sim, sequence: reconstructedRepeated };
+          if (reconstructedRepeated && verifySimulationChecksum(tempSimRepeated)) {
+            // Backup the original corrupted version first
+            const backupId = `corr_${simId}_${Date.now()}`;
+            const backupRecord = {
+              id: backupId,
+              original_id: simId,
+              name: simName,
+              sequence: currentSequence,
+              checksum: expectedChecksum,
+              triplicates: [],
+              original: sim.original || sim.payload || "",
+              strategy: sim.strategy || "base4",
+              timestamp: new Date().toISOString()
+            };
+            await StorageService.save("corruption_history", backupRecord);
+
+            sim.sequence = reconstructedRepeated;
+            await StorageService.save("simulations", sim);
+
+            fixed_count++;
+            fixed = true;
+            finalSequence = reconstructedRepeated;
+            recoveryMethod = "inline_triplication_majority_vote";
+
+            details.push({
+              id: simId,
+              name: simName,
+              status: "fixed",
+              recovery_status: "Fully Recovered",
+              original_corrupted: currentSequence,
+              fixed_sequence: reconstructedRepeated,
+              method: "inline_triplication_majority_vote"
+            });
+            console.log(`[Auto self-healing] Successfully repaired simulation ${simId} via inline character majority-vote (repeated).`);
+          } else {
+            const tempSimSingle = { ...sim, sequence: reconstructedSingle };
+            if (reconstructedSingle && verifySimulationChecksum(tempSimSingle)) {
+              // Backup the original corrupted version first
+              const backupId = `corr_${simId}_${Date.now()}`;
+              const backupRecord = {
+                id: backupId,
+                original_id: simId,
+                name: simName,
+                sequence: currentSequence,
+                checksum: expectedChecksum,
+                triplicates: [],
+                original: sim.original || sim.payload || "",
+                strategy: sim.strategy || "base4",
+                timestamp: new Date().toISOString()
+              };
+              await StorageService.save("corruption_history", backupRecord);
+
+              sim.sequence = reconstructedSingle;
+              await StorageService.save("simulations", sim);
+
+              fixed_count++;
+              fixed = true;
+              finalSequence = reconstructedSingle;
+              recoveryMethod = "inline_triplication_majority_vote_single";
+
+              details.push({
+                id: simId,
+                name: simName,
+                status: "fixed",
+                recovery_status: "Fully Recovered",
+                original_corrupted: currentSequence,
+                fixed_sequence: reconstructedSingle,
+                method: "inline_triplication_majority_vote_single"
+              });
+              console.log(`[Auto self-healing] Successfully repaired simulation ${simId} via inline character majority-vote (single).`);
+            }
           }
         }
 
