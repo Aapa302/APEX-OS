@@ -37,18 +37,5 @@
     ],
     "original": "APEX-OS Block 3",
     "strategy": "base4"
-  },
-  {
-    "id": "sim_4",
-    "name": "BRCA1 Gene Segment Delta (Synthetic)",
-    "sequence": "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT",
-    "checksum": "75a1d2cce0f5d81f4ed1458b12a96d457d1ebdefcbcf46c86ff952414025be00",
-    "triplicates": [
-      "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT",
-      "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT",
-      "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT"
-    ],
-    "original": "",
-    "strategy": "base4"
   }
 ]

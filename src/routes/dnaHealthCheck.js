@@ -34,6 +34,65 @@ async function writeHealthLogs(logs) {
   await fs.rename(tempPath, HEALTH_LOGS_FILE);
 }
 
+// Robust multi-case checksum verification helper
+function verifySimulationChecksum(sim) {
+  const currentSequence = sim.sequence || "";
+  const expectedChecksum = sim.checksum || "";
+  if (!expectedChecksum) return false;
+
+  // Clean raw nucleotide sequence
+  let rawSeq = currentSequence.trim();
+  if (rawSeq.startsWith(">")) {
+    const lines = rawSeq.split("\n");
+    rawSeq = lines.slice(1).join("").replace(/[^ACGTacgt]/g, "");
+  } else {
+    rawSeq = rawSeq.replace(/[^ACGTacgt]/g, "");
+  }
+  rawSeq = rawSeq.toUpperCase();
+
+  // Case 1: Checksum is the SHA-256 of the raw DNA sequence itself
+  const rawSeqHash = sha256(rawSeq);
+  if (rawSeqHash === expectedChecksum) {
+    return true;
+  }
+
+  // Case 2: Checksum is the SHA-256 of the decoded original payload
+  try {
+    const fastaForDecode = currentSequence.trim().startsWith(">")
+      ? currentSequence
+      : `>APEX_DNA_BLOCK|STRATEGY:${sim.strategy || "base4"}|HASH:${expectedChecksum}\n${rawSeq}\n`;
+
+    const decodeResult = DNAEngineerService.decode(fastaForDecode);
+    if (decodeResult && decodeResult.success && decodeResult.decoded) {
+      const decodedHash = sha256(decodeResult.decoded);
+      if (decodedHash === expectedChecksum) {
+        return true;
+      }
+    }
+  } catch (err) {
+    // Ignore and try fallback
+  }
+
+  // Case 3: Checksum matches the original payload field
+  if (sim.original) {
+    const originalHash = sha256(sim.original);
+    if (originalHash === expectedChecksum) {
+      // Decode and check if it matches original
+      try {
+        const fastaForDecode = currentSequence.trim().startsWith(">")
+          ? currentSequence
+          : `>APEX_DNA_BLOCK|STRATEGY:${sim.strategy || "base4"}|HASH:${expectedChecksum}\n${rawSeq}\n`;
+        const decodeResult = DNAEngineerService.decode(fastaForDecode);
+        if (decodeResult && decodeResult.success && decodeResult.decoded === sim.original) {
+          return true;
+        }
+      } catch (err) {}
+    }
+  }
+
+  return false;
+}
+
 // POST /dna-health-check — runs health check and applies triplication/majority-vote error correction
 router.post("/", async (req, res, next) => {
   try {
@@ -55,10 +114,9 @@ router.post("/", async (req, res, next) => {
     for (const sim of simulations) {
       const currentSequence = sim.sequence || "";
       const expectedChecksum = sim.checksum || "";
-      const currentHash = sha256(currentSequence);
 
       // 1. Run checksum verification first to detect if block is corrupted.
-      const isCorrupted = !expectedChecksum || (currentHash !== expectedChecksum);
+      const isCorrupted = !verifySimulationChecksum(sim);
 
       if (!isCorrupted) {
         // Block is valid and healthy.
@@ -109,8 +167,8 @@ router.post("/", async (req, res, next) => {
           }
 
           // 3. After correction, re-run checksum verification on the corrected block to confirm it's now valid.
-          const reconstructedHash = sha256(reconstructed);
-          if (reconstructedHash === expectedChecksum) {
+          const tempSim = { ...sim, sequence: reconstructed };
+          if (verifySimulationChecksum(tempSim)) {
             sim.sequence = reconstructed;
             fixed_count++;
             fixed = true;
@@ -128,10 +186,13 @@ router.post("/", async (req, res, next) => {
           try {
             const regenerated = DNAEngineerService.encode(sim.original, sim.strategy || "base4");
             if (regenerated && regenerated.success && regenerated.sequence) {
-              const targetChecksum = expectedChecksum || regenerated.hash;
+              const tempSim = { ...sim, sequence: regenerated.sequence };
+              if (!tempSim.checksum) {
+                tempSim.checksum = regenerated.hash;
+              }
 
               // 3. Re-run checksum verification on the corrected block.
-              if (sha256(regenerated.sequence) === targetChecksum) {
+              if (verifySimulationChecksum(tempSim)) {
                 sim.sequence = regenerated.sequence;
                 if (!sim.checksum) {
                   sim.checksum = regenerated.hash;
