@@ -1,6 +1,6 @@
 [
   {
-    "timestamp": "2026-07-23T05:44:49.587Z",
+    "timestamp": "2026-07-20T19:39:32.957Z",
     "scanned_count": 3,
     "corrupted_found": 2,
     "fixed_count": 2,
@@ -8,14 +8,12 @@
       {
         "id": "sim_1",
         "name": "BRCA1 Gene Segment Alpha",
-        "status": "healthy",
-        "recovery_status": "Healthy"
+        "status": "healthy"
       },
       {
         "id": "sim_2",
         "name": "BRCA1 Gene Segment Beta (Corrupted)",
         "status": "fixed",
-        "recovery_status": "Fully Recovered",
         "original_corrupted": "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAC",
         "fixed_sequence": "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAG",
         "method": "triplication_majority_vote"
@@ -24,7 +22,6 @@
         "id": "sim_3",
         "name": "BRCA1 Gene Segment Gamma (Corrupted)",
         "status": "fixed",
-        "recovery_status": "Fully Recovered",
         "original_corrupted": "CAACCCAACACCCCGAAGTCCATTCCATAGGACAAGCGTACGTTCGATCGGTAGAAATAT",
         "fixed_sequence": "CAACCCAACACCCCGAAGTCCATTCCATAGAACAAGCGTACGTTCGATCGGTAGAAATAT",
         "method": "triplication_majority_vote"
@@ -32,7 +29,7 @@
     ]
   },
   {
-    "timestamp": "2026-07-23T05:44:49.590Z",
+    "timestamp": "2026-07-20T19:39:32.960Z",
     "scanned_count": 3,
     "corrupted_found": 0,
     "fixed_count": 0,
@@ -40,25 +37,22 @@
       {
         "id": "sim_1",
         "name": "BRCA1 Gene Segment Alpha",
-        "status": "healthy",
-        "recovery_status": "Healthy"
+        "status": "healthy"
       },
       {
         "id": "sim_2",
         "name": "BRCA1 Gene Segment Beta (Corrupted)",
-        "status": "healthy",
-        "recovery_status": "Healthy"
+        "status": "healthy"
       },
       {
         "id": "sim_3",
         "name": "BRCA1 Gene Segment Gamma (Corrupted)",
-        "status": "healthy",
-        "recovery_status": "Healthy"
+        "status": "healthy"
       }
     ]
   },
   {
-    "timestamp": "2026-07-23T05:44:49.601Z",
+    "timestamp": "2026-07-20T19:39:32.969Z",
     "scanned_count": 3,
     "corrupted_found": 3,
     "fixed_count": 0,
@@ -68,7 +62,6 @@
         "corrupted_id": "sim_legacy_1",
         "name": "BRCA1 Legacy Missing Checksum",
         "status": "corrupted_unfixable",
-        "recovery_status": "Unrecoverable",
         "reason": "unable to fix - legacy format"
       },
       {
@@ -76,7 +69,6 @@
         "corrupted_id": "sim_legacy_2",
         "name": "BRCA1 Legacy Missing Triplicates",
         "status": "corrupted_unfixable",
-        "recovery_status": "Unrecoverable",
         "reason": "unable to fix - legacy format"
       },
       {
@@ -84,7 +76,6 @@
         "corrupted_id": "sim_legacy_3",
         "name": "BRCA1 Unfixable Majority Mismatch",
         "status": "corrupted_unfixable",
-        "recovery_status": "Unrecoverable",
         "reason": "unable to fix - majority-voted sequence hash mismatch"
       }
     ]
