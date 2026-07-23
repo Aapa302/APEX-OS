@@ -1,13 +1,25 @@
 const express = require("express");
 const StorageService = require("../services/StorageService");
+const { verifyFirebaseToken } = require("../middleware/auth");
 
 const router = express.Router();
 
-// GET /tasks — returns all tasks
+// Apply auth middleware to all tasks routes
+router.use(verifyFirebaseToken);
+
+// GET /tasks — returns all tasks for the authenticated user
 router.get("/", async (req, res, next) => {
   try {
     const tasks = await StorageService.getAll("tasks");
-    res.json(tasks);
+    // Filter tasks: user's own tasks OR legacy/unassigned documents
+    const filtered = tasks.map(t => {
+      if (!t.userId) {
+        return { ...t, userId: "legacy/unassigned" };
+      }
+      return t;
+    }).filter(t => t.userId === req.userId || t.userId === "legacy/unassigned");
+
+    res.json(filtered);
   } catch (error) {
     next(error);
   }
@@ -24,8 +36,9 @@ router.post("/", async (req, res, next) => {
 
     const tasks = await StorageService.getAll("tasks");
 
-    // duplicate check: same title + phase already exist na ho
-    const duplicate = tasks.some(
+    // duplicate check within user's own visible tasks
+    const userTasks = tasks.filter(t => t.userId === req.userId || !t.userId);
+    const duplicate = userTasks.some(
       t => t.title.trim().toLowerCase() === title.trim().toLowerCase() &&
            t.phase.trim().toLowerCase() === phase.trim().toLowerCase()
     );
@@ -48,6 +61,7 @@ router.post("/", async (req, res, next) => {
       column: taskColumn,
       assignee: (assignee || "Unassigned").trim(),
       priority: (priority || "medium").toLowerCase().trim(),
+      userId: req.userId, // Save userId
       createdAt: new Date().toISOString()
     };
 
@@ -68,6 +82,16 @@ router.patch("/:id", async (req, res, next) => {
     const task = await StorageService.getById("tasks", id);
     if (!task) {
       return res.status(404).json({ error: "Task not found." });
+    }
+
+    // Check ownership (allow if same user or legacy document)
+    if (task.userId && task.userId !== req.userId) {
+      return res.status(403).json({
+        error: {
+          type: "forbidden",
+          message: "You do not have permission to modify or delete this document."
+        }
+      });
     }
 
     const updates = {};
@@ -108,6 +132,16 @@ router.delete("/:id", async (req, res, next) => {
     const task = await StorageService.getById("tasks", id);
     if (!task) {
       return res.status(404).json({ error: "Task not found." });
+    }
+
+    // Check ownership (allow if same user or legacy document)
+    if (task.userId && task.userId !== req.userId) {
+      return res.status(403).json({
+        error: {
+          type: "forbidden",
+          message: "You do not have permission to modify or delete this document."
+        }
+      });
     }
 
     await StorageService.delete("tasks", id);

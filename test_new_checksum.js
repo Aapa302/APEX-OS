@@ -24,6 +24,7 @@ async function makePostRequest(url, body) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": "Bearer mock-test-token",
         "Content-Length": Buffer.byteLength(JSON.stringify(body))
       }
     };
@@ -48,7 +49,17 @@ async function makePostRequest(url, body) {
 
 async function makeGetRequest(url) {
   return new Promise((resolve, reject) => {
-    http.get(url, (res) => {
+    const u = new URL(url);
+    const options = {
+      hostname: u.hostname,
+      port: u.port,
+      path: u.pathname,
+      method: "GET",
+      headers: {
+        "Authorization": "Bearer mock-test-token"
+      }
+    };
+    http.get(options, (res) => {
       let data = "";
       res.on("data", (chunk) => { data += chunk; });
       res.on("end", () => {
@@ -63,10 +74,8 @@ async function makeGetRequest(url) {
 }
 
 async function main() {
-  console.log("🧪 Starting New Checksum Generation & Verification test...");
+  console.log("🧪 Starting New Checksum Generation & Verification test with AUTH...");
 
-  // Start the server in the background if it is not already running
-  // We can just query /ping first
   let running = false;
   try {
     const res = await makeGetRequest("http://localhost:8787/ping");
@@ -95,11 +104,10 @@ async function main() {
     console.log(`Expected CRC32 of sequence: "${expectedCrc}"`);
 
     // 1. Save new simulation
-    console.log("\n1. Sending POST /api/save-simulation with raw sequence...");
+    console.log("\n1. Sending POST /api/save-simulation with raw sequence and Auth...");
     const saveRes = await makePostRequest("http://localhost:8787/api/save-simulation", {
       name: "Test Checksum Sim",
       sequence: testSequence
-      // Notice we are NOT sending any client checksum!
     });
 
     console.log("Response status:", saveRes.status);
@@ -112,7 +120,7 @@ async function main() {
     console.log("✅ Passed: Backend calculated the checksum and saved successfully.");
 
     // 2. Run Auto Scan to confirm health verification
-    console.log("\n2. Executing GET /api/dna-health/auto-scan to verify simulation health...");
+    console.log("\n2. Executing GET /api/dna-health/auto-scan with Auth to verify simulation health...");
     const scanRes = await makeGetRequest("http://localhost:8787/api/dna-health/auto-scan");
     console.log("Scan Response Status:", scanRes.status);
 
@@ -125,7 +133,7 @@ async function main() {
     assert.strictEqual(savedSimReport.recovery_status, "Healthy");
     console.log("✅ Passed: New simulation validated perfectly as 'healthy'!");
 
-    console.log("\n🎉 ALL CHECKSUM GENERATION & VERIFICATION TESTS PASSED SUCCESSFULLY!");
+    console.log("\n🎉 ALL CHECKSUM GENERATION & VERIFICATION TESTS WITH AUTH PASSED SUCCESSFULLY!");
     process.exit(0);
   } catch (err) {
     console.error("\n❌ Test failure:", err);

@@ -2,8 +2,12 @@ const express = require("express");
 const crypto = require("crypto");
 const StorageService = require("../services/StorageService");
 const DNAEngineerService = require("../services/DNAEngineerService");
+const { verifyFirebaseToken } = require("../middleware/auth");
 
 const router = express.Router();
+
+// Require auth
+router.use(verifyFirebaseToken);
 
 // Helper to compute sha256
 function sha256(str) {
@@ -92,15 +96,18 @@ function verifySimulationChecksum(sim) {
 // GET /api/dna-health/auto-scan
 router.get("/auto-scan", async (req, res, next) => {
   try {
-    let simulations;
+    let allSimulations;
     try {
-      simulations = await StorageService.getAll("simulations");
+      allSimulations = await StorageService.getAll("simulations");
     } catch (parseErr) {
       return res.status(422).json({
         error: "simulations.json is corrupted",
         details: parseErr.message
       });
     }
+
+    // Filter simulations for User-based Data Isolation
+    const simulations = allSimulations.filter(sim => !sim.userId || sim.userId === req.userId);
 
     // Verbose debug log raw simulations array
     console.log(`[Auto self-healing DEBUG-LOG] TOTAL SIMULATIONS RETRIEVED: ${simulations.length}`);
@@ -183,6 +190,7 @@ router.get("/auto-scan", async (req, res, next) => {
               triplicates: [...triplicates],
               original: sim.original || sim.payload || "",
               strategy: sim.strategy || "base4",
+              userId: sim.userId || "",
               timestamp: new Date().toISOString()
             };
             await StorageService.save("corruption_history", backupRecord);
@@ -253,6 +261,7 @@ router.get("/auto-scan", async (req, res, next) => {
               triplicates: [],
               original: sim.original || sim.payload || "",
               strategy: sim.strategy || "base4",
+              userId: sim.userId || "",
               timestamp: new Date().toISOString()
             };
             await StorageService.save("corruption_history", backupRecord);
@@ -289,6 +298,7 @@ router.get("/auto-scan", async (req, res, next) => {
                 triplicates: [],
                 original: sim.original || sim.payload || "",
                 strategy: sim.strategy || "base4",
+                userId: sim.userId || "",
                 timestamp: new Date().toISOString()
               };
               await StorageService.save("corruption_history", backupRecord);

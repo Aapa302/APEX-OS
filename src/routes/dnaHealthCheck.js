@@ -4,9 +4,13 @@ const path = require("path");
 const crypto = require("crypto");
 const StorageService = require("../services/StorageService");
 const DNAEngineerService = require("../services/DNAEngineerService");
+const { verifyFirebaseToken } = require("../middleware/auth");
 
 const router = express.Router();
 const HEALTH_LOGS_FILE = path.join(__dirname, "../../dna-health-logs.json");
+
+// Require auth
+router.use(verifyFirebaseToken);
 
 // Helper to compute sha256
 function sha256(str) {
@@ -116,15 +120,18 @@ function verifySimulationChecksum(sim) {
 // POST /dna-health-check — runs health check and applies triplication/majority-vote error correction
 router.post("/", async (req, res, next) => {
   try {
-    let simulations;
+    let allSimulations;
     try {
-      simulations = await StorageService.getAll("simulations");
+      allSimulations = await StorageService.getAll("simulations");
     } catch (parseErr) {
       return res.status(422).json({
         error: "simulations.json is corrupted",
         details: parseErr.message
       });
     }
+
+    // Filter simulations for User-based Data Isolation
+    const simulations = allSimulations.filter(sim => !sim.userId || sim.userId === req.userId);
 
     const scanned_count = simulations.length;
     let corrupted_found = 0;
