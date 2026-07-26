@@ -1,6 +1,6 @@
 [
   {
-    "timestamp": "2026-07-26T18:22:20.668Z",
+    "timestamp": "2026-07-26T18:45:14.193Z",
     "scanned_count": 3,
     "corrupted_found": 2,
     "fixed_count": 2,
@@ -32,7 +32,7 @@
     ]
   },
   {
-    "timestamp": "2026-07-26T18:22:20.672Z",
+    "timestamp": "2026-07-26T18:45:14.198Z",
     "scanned_count": 3,
     "corrupted_found": 0,
     "fixed_count": 0,
@@ -58,7 +58,7 @@
     ]
   },
   {
-    "timestamp": "2026-07-26T18:22:20.685Z",
+    "timestamp": "2026-07-26T18:45:14.210Z",
     "scanned_count": 3,
     "corrupted_found": 3,
     "fixed_count": 0,
@@ -86,58 +86,6 @@
         "status": "legacy_unverified",
         "recovery_status": "Legacy Unverified",
         "reason": "legacy checksum format - unverified"
-      }
-    ]
-  },
-  {
-    "timestamp": "2026-07-26T18:22:57.321Z",
-    "scanned_count": 3,
-    "corrupted_found": 0,
-    "fixed_count": 0,
-    "details": [
-      {
-        "id": "sim_1",
-        "name": "BRCA1 Gene Segment Alpha",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_2",
-        "name": "BRCA1 Gene Segment Beta (Corrupted)",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_3",
-        "name": "BRCA1 Gene Segment Gamma (Corrupted)",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      }
-    ]
-  },
-  {
-    "timestamp": "2026-07-26T18:23:31.255Z",
-    "scanned_count": 3,
-    "corrupted_found": 0,
-    "fixed_count": 0,
-    "details": [
-      {
-        "id": "sim_1",
-        "name": "BRCA1 Gene Segment Alpha",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_2",
-        "name": "BRCA1 Gene Segment Beta (Corrupted)",
-        "status": "healthy",
-        "recovery_status": "Healthy"
-      },
-      {
-        "id": "sim_3",
-        "name": "BRCA1 Gene Segment Gamma (Corrupted)",
-        "status": "healthy",
-        "recovery_status": "Healthy"
       }
     ]
   }
