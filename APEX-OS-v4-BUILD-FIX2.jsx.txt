@@ -3641,15 +3641,20 @@ export default function ApexOS() {
       isRealCommand = true;
       commandType = "show-algos";
     } else if (
-      normalizedText.includes("search") ||
-      normalizedText.includes("find") ||
-      normalizedText.includes("ncbi") ||
-      normalizedText.includes("pubmed") ||
-      normalizedText.includes("brca") ||
-      normalizedText.includes("tp53") ||
-      normalizedText.includes("dna storage") ||
-      normalizedText.includes("reed-solomon") ||
-      normalizedText.includes("crispr")
+      (
+        /\bsearch\b/i.test(normalizedText) ||
+        normalizedText.includes("find") ||
+        normalizedText.includes("ncbi") ||
+        normalizedText.includes("pubmed") ||
+        normalizedText.includes("brca") ||
+        normalizedText.includes("tp53") ||
+        normalizedText.includes("dna storage") ||
+        normalizedText.includes("reed-solomon") ||
+        normalizedText.includes("crispr")
+      ) &&
+      !normalizedText.includes("research note") &&
+      !normalizedText.includes("task") &&
+      !normalizedText.includes("note")
     ) {
       isRealCommand = true;
       commandType = "search-ncbi";
