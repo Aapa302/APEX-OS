@@ -1,6 +1,6 @@
 [
   {
-    "timestamp": "2026-07-26T18:45:14.193Z",
+    "timestamp": "2026-07-23T09:38:04.518Z",
     "scanned_count": 3,
     "corrupted_found": 2,
     "fixed_count": 2,
@@ -32,7 +32,7 @@
     ]
   },
   {
-    "timestamp": "2026-07-26T18:45:14.198Z",
+    "timestamp": "2026-07-23T09:38:04.525Z",
     "scanned_count": 3,
     "corrupted_found": 0,
     "fixed_count": 0,
@@ -58,7 +58,7 @@
     ]
   },
   {
-    "timestamp": "2026-07-26T18:45:14.210Z",
+    "timestamp": "2026-07-23T09:38:04.547Z",
     "scanned_count": 3,
     "corrupted_found": 3,
     "fixed_count": 0,
@@ -67,25 +67,25 @@
         "id": "sim_legacy_1",
         "corrupted_id": "sim_legacy_1",
         "name": "BRCA1 Legacy Missing Checksum",
-        "status": "legacy_unverified",
-        "recovery_status": "Legacy Unverified",
-        "reason": "legacy checksum format - unverified"
+        "status": "corrupted_unfixable",
+        "recovery_status": "Unrecoverable",
+        "reason": "unable to fix - legacy format"
       },
       {
         "id": "sim_legacy_2",
         "corrupted_id": "sim_legacy_2",
         "name": "BRCA1 Legacy Missing Triplicates",
-        "status": "legacy_unverified",
-        "recovery_status": "Legacy Unverified",
-        "reason": "legacy checksum format - unverified"
+        "status": "corrupted_unfixable",
+        "recovery_status": "Unrecoverable",
+        "reason": "unable to fix - legacy format"
       },
       {
         "id": "sim_legacy_3",
         "corrupted_id": "sim_legacy_3",
         "name": "BRCA1 Unfixable Majority Mismatch",
-        "status": "legacy_unverified",
-        "recovery_status": "Legacy Unverified",
-        "reason": "legacy checksum format - unverified"
+        "status": "corrupted_unfixable",
+        "recovery_status": "Unrecoverable",
+        "reason": "unable to fix - majority-voted sequence hash mismatch"
       }
     ]
   }
