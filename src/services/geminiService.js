@@ -549,7 +549,14 @@ async function generateContentWithRetry(messages, system, opts = {}, isRetry = f
     };
 
     if (isCeo) {
-      body.tools = CEO_TOOLS;
+      if (opts.isAutonomous) {
+        const declarations = CEO_TOOLS[0].functionDeclarations.filter(decl =>
+          ["create_task", "create_research_note", "trigger_dna_health_scan"].includes(decl.name)
+        );
+        body.tools = [{ functionDeclarations: declarations }];
+      } else {
+        body.tools = CEO_TOOLS;
+      }
     }
 
     console.info(`[GeminiRequest] model: ${model}, maxOutputTokens: ${maxTokens}, jsonMode: ${jsonMode}, isCeo: ${isCeo}, loopCount: ${loopCount}`);
@@ -563,9 +570,85 @@ async function generateContentWithRetry(messages, system, opts = {}, isRetry = f
 
     if (functionCalls.length > 0) {
       console.info(`[GeminiService] Model requested ${functionCalls.length} function call(s).`);
+
+      let callsToExecute = functionCalls;
+      if (opts.isAutonomous) {
+        if (!opts.autonomousToolsExecuted) {
+          opts.autonomousToolsExecuted = 0;
+        }
+        if (!opts.rejectedAttempts) {
+          opts.rejectedAttempts = [];
+        }
+        if (!opts.actionsTaken) {
+          opts.actionsTaken = [];
+        }
+
+        // 1. Filter out disallowed tools and log them as rejected
+        const allowed = ["create_task", "create_research_note", "trigger_dna_health_scan"];
+        const validCalls = [];
+        for (const fc of functionCalls) {
+          if (!allowed.includes(fc.functionCall.name)) {
+            console.warn(`[Autonomous CEO] Blocked unauthorized tool execution attempt: ${fc.functionCall.name}`);
+            opts.rejectedAttempts.push({
+              tool: fc.functionCall.name,
+              args: fc.functionCall.args,
+              reason: "Unauthorized tool in autonomous mode"
+            });
+          } else {
+            validCalls.push(fc);
+          }
+        }
+
+        // 2. Cap at max 2 tool calls total
+        const remainingCapacity = 2 - opts.autonomousToolsExecuted;
+        if (remainingCapacity <= 0) {
+          console.warn(`[Autonomous CEO] Maximum tool limit of 2 reached. Ignoring further tool calls.`);
+          callsToExecute = [];
+        } else if (validCalls.length > remainingCapacity) {
+          console.warn(`[Autonomous CEO] Slicing valid tool calls from ${validCalls.length} to remaining capacity ${remainingCapacity}`);
+          callsToExecute = validCalls.slice(0, remainingCapacity);
+          // Log any sliced-out tools as exceeded limit
+          for (let i = remainingCapacity; i < validCalls.length; i++) {
+            opts.rejectedAttempts.push({
+              tool: validCalls[i].functionCall.name,
+              args: validCalls[i].functionCall.args,
+              reason: "Exceeded maximum autonomous tool limit of 2"
+            });
+          }
+        } else {
+          callsToExecute = validCalls;
+        }
+
+        opts.autonomousToolsExecuted += callsToExecute.length;
+      }
+
       const functionResponseParts = [];
       for (const fc of functionCalls) {
+        if (opts.isAutonomous && !callsToExecute.includes(fc)) {
+          const errMsg = !["create_task", "create_research_note", "trigger_dna_health_scan"].includes(fc.functionCall.name)
+            ? `Tool execution rejected: '${fc.functionCall.name}' is not permitted during autonomous check.`
+            : `Tool execution skipped: Exceeded maximum autonomous tool limit of 2.`;
+
+          functionResponseParts.push({
+            functionResponse: {
+              name: fc.functionCall.name,
+              id: fc.functionCall.id || fc.functionCall.name,
+              response: { error: errMsg }
+            }
+          });
+          continue;
+        }
+
         const result = await executeTool(fc.functionCall.name, fc.functionCall.args, opts.authHeader);
+
+        if (opts.isAutonomous) {
+          opts.actionsTaken.push({
+            tool: fc.functionCall.name,
+            args: fc.functionCall.args,
+            result: result
+          });
+        }
+
         functionResponseParts.push({
           functionResponse: {
             name: fc.functionCall.name,
