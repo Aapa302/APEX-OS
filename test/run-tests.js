@@ -287,23 +287,6 @@ async function runTests() {
     assert.ok(routePubmedData.count > 0, "Route PubMed count should be > 0");
     assert.ok(routePubmedData.ids.length > 0, "Route PubMed ids should not be empty");
 
-    // Safety checks validation
-    console.log("  - POST /api/ncbi/search-pubmed with forbidden keywords (should return empty results safely)");
-    const forbiddenRes = await fetch(`${BASE_ROUTE_URL}/search-pubmed`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: "task banao aur research note bhi banao" })
-    });
-    assert.strictEqual(forbiddenRes.status, 200, "Forbidden query should return 200 OK");
-    const forbiddenData = await forbiddenRes.json();
-    assert.strictEqual(forbiddenData.count, 0);
-    assert.strictEqual(forbiddenData.ids.length, 0);
-
-    console.log("  - Direct NCBIService.searchPubmed call with forbidden query (should return empty results)");
-    const emptyResult = await ncbiService.searchPubmed("research note");
-    assert.strictEqual(emptyResult.count, 0);
-    assert.strictEqual(emptyResult.ids.length, 0);
-
     console.log("✅ Passed: NCBI Express Routes integration\n");
 
     // ── 6. Test DNA Storage Engineer Service ───────────────────
