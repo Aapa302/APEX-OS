@@ -383,41 +383,12 @@ async function generateContent(messages, system, opts = {}) {
 async function makeApiCallWithFallback(body, urls, model, isRetry, quotaRetryDone) {
   let lastError = null;
   let retryCount = 0;
+  const maxRetries = 1; // Keep max retries extremely low (1) per endpoint so that we quickly fall back to another model rather than stalling for 60 seconds.
 
   for (const url of urls) {
     const cleanUrl = url.split("?")[0];
     console.info(`[GeminiService] Attempting model [${model}] at endpoint: ${cleanUrl}`);
-
     retryCount = 0;
-    for (const url of urls) {
-      const cleanUrl = url.split("?")[0];
-      console.info(`[GeminiService] Attempting model [${model}] at endpoint: ${cleanUrl}`);
-
-      const geminiContents = toGeminiContents(messages);
-      if (system && system.trim()) {
-        if (geminiContents.length > 0 && geminiContents[0].role === "user") {
-          geminiContents[0].parts.unshift({ text: `System Instruction / System Prompt:\n${system}\n\n` });
-        } else {
-          geminiContents.unshift({ role: "user", parts: [{ text: `System Instruction / System Prompt:\n${system}` }] });
-        }
-      }
-
-      const body = {
-        contents: geminiContents,
-        generationConfig: {
-          maxOutputTokens: maxTokens,
-          temperature: opts.temperature ?? 0.7,
-          topP: opts.top_p ?? 0.95,
-          ...(jsonMode && !url.includes("/v1/") ? { response_mime_type: "application/json" } : {})
-        }
-      };
-
-      let retryCount = 0;
-      // Keep max retries extremely low (1) per endpoint so that we quickly fall back
-      // to another model rather than stalling for 60 seconds.
-      const maxRetries = 1;
-    let retryCount = 0;
-    const maxRetries = 1;
 
     while (retryCount <= maxRetries) {
       let res;
@@ -433,7 +404,7 @@ async function makeApiCallWithFallback(body, urls, model, isRetry, quotaRetryDon
       } catch (networkErr) {
         console.error(`[GeminiService] Fetch failed for ${cleanUrl}:`, networkErr.message);
         lastError = new GeminiError(`Network error calling Gemini: ${networkErr.message}`, 502);
-        break; // try next endpoint
+        break;
       }
 
       let data;
@@ -442,7 +413,7 @@ async function makeApiCallWithFallback(body, urls, model, isRetry, quotaRetryDon
         data = JSON.parse(rawText);
       } catch (jsonErr) {
         lastError = new GeminiError(`Gemini returned non-JSON response (status ${res.status})`, 502, rawText.slice(0, 500));
-        break; // try next endpoint
+        break;
       }
 
       const isModelNotFound = res.status === 404 ||
@@ -473,7 +444,7 @@ async function makeApiCallWithFallback(body, urls, model, isRetry, quotaRetryDon
 
         if (res.status === 404) {
           lastError = new GeminiError(data?.error?.message || "Model not found", 404);
-          break; // try next endpoint
+          break;
         }
 
         if (res.status === 429) {
@@ -481,7 +452,7 @@ async function makeApiCallWithFallback(body, urls, model, isRetry, quotaRetryDon
                           data?.error?.message?.toLowerCase().includes("limit");
 
           if (isQuota && !quotaRetryDone) {
-            let waitSec = 5; // default backoff
+            let waitSec = 5;
             const errMsg = data?.error?.message || "";
             const match = errMsg.match(/(?:retry|wait|after)[^\d]*(\d+(?:\.\d+)?)[^\d]*(?:second|sec|s)/i);
             if (match) {
@@ -489,7 +460,6 @@ async function makeApiCallWithFallback(body, urls, model, isRetry, quotaRetryDon
             }
             console.warn(`[GeminiService] Retrying after quota error, waiting ${waitSec}s. Error details: ${errMsg}`);
             await new Promise((resolve) => setTimeout(resolve, waitSec * 1000));
-            // Retry the request once with quotaRetryDone = true
             return makeApiCallWithFallback(body, urls, model, isRetry, true);
           }
 
@@ -504,12 +474,12 @@ async function makeApiCallWithFallback(body, urls, model, isRetry, quotaRetryDon
 
         if (res.status === 503 || res.status === 502 || res.status === 504) {
           lastError = new GeminiError(`Gemini Service Unavailable: ${data?.error?.message || "Service error"}`, res.status, data?.error || null);
-          break; // try next endpoint
+          break;
         }
 
         const apiMessage = data?.error?.message || `Gemini API error (status ${res.status})`;
         lastError = new GeminiError(apiMessage, res.status, data?.error || null);
-        break; // try next endpoint
+        break;
       }
 
       console.info(`[GeminiService] Success with model [${model}]`);
