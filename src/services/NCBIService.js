@@ -160,6 +160,29 @@ async function searchDatabase(db, query) {
     throw new NCBIError("Search query must be a non-empty string.", 400);
   }
 
+  const lowerQuery = query.toLowerCase();
+  if (
+    lowerQuery.includes("task") ||
+    lowerQuery.includes("note") ||
+    lowerQuery.includes("banao") ||
+    lowerQuery.includes("banav") ||
+    lowerQuery.includes("create") ||
+    lowerQuery.includes("make") ||
+    lowerQuery.includes("add") ||
+    lowerQuery.includes("delete") ||
+    lowerQuery.includes("remove") ||
+    lowerQuery.includes("update")
+  ) {
+    logger.info(`[NCBI Service] Safety check triggered for query: "${query}". Returning empty result safely.`);
+    return {
+      db,
+      query,
+      count: 0,
+      ids: [],
+      results: []
+    };
+  }
+
   // 1. Run esearch to get UIDs
   const searchResult = await callNCBI("esearch.fcgi", {
     db,
