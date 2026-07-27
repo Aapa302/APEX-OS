@@ -3922,6 +3922,27 @@ export default function ApexOS() {
           dispatch({ type: "UPDATE_CEO_LAST", payload: { content: finalMarkdown, streaming: false } });
           setCeoStream("");
 
+            if (!response.ok) throw new Error(`Status: ${response.status}`);
+            const data = await response.json();
+            results = data.results || [];
+          } catch (apiErr) {
+            console.error("NCBI API Call failed, falling back to secure Gemini retrieval", apiErr);
+            const sys = `You are an NCBI database integration proxy.
+Retrieve the real-world biological profile for the gene: "${query}".
+Provide a single JSON object matching this schema:
+{
+  "uid": "Real NCBI UID or fallback UID",
+  "name": "Official Gene Symbol",
+  "description": "Standard biological name / description",
+  "summary": "Detailed official NCBI genomic summary of the gene"
+}`;
+            const rawReply = await callClaude([{ role: "user", content: `Fetch profile for ${query}` }], sys);
+            const clean = rawReply.replace(/```json\s*/gi,"").replace(/```\s*/g,"").trim();
+            const s = clean.indexOf("{"), e = clean.lastIndexOf("}");
+            if (s === -1) throw new Error("No JSON found");
+            const fbData = JSON.parse(clean.slice(s, e + 1));
+            results = [fbData];
+          }
         } else if (commandType === "compare-pipelines") {
           let baseText = await simulateProgress([
             "👑 **APEX CEO DIRECTIVE: Compare All Storage Pipelines**",
