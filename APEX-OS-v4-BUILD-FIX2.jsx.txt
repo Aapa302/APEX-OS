@@ -6588,6 +6588,11 @@ Empirical DNA Synthesis Profile to stress-test:
                         {m.role === "user" ? "🧑" : "👑"}
                       </div>
                       <div style={{ background: m.role === "user" ? `${T.accent}18` : T.surf, border: `1px solid ${m.role === "user" ? T.accent + "30" : T.border2}`, borderRadius: 14, padding: "10px 14px", minWidth: 0 }}>
+                        {(m.autonomous || m.source === "autonomous") && (
+                          <div style={{ fontSize: "0.72rem", color: T.accent, fontWeight: "bold", marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
+                            🤖 Autonomous Action:
+                          </div>
+                        )}
                         {m.role === "user" ? (
                           <div style={{ color: T.text1, fontSize: "0.85rem", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{m.display || m.content}</div>
                         ) : m.streaming ? (

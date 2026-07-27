@@ -109,6 +109,26 @@ app.use("/api/hypotheses", hypothesesRouter);
 app.use("/api/experiments", experimentsRouter);
 app.use("/api/debug", debugRouter);
 
+app.get("/autonomous-log", async (req, res, next) => {
+  try {
+    const fs = require("fs").promises;
+    const path = require("path");
+    const logPath = path.join(__dirname, "../ceo-autonomous-log.json");
+    let logs = [];
+    try {
+      const data = await fs.readFile(logPath, "utf8");
+      logs = JSON.parse(data);
+    } catch (err) {
+      if (err.code !== "ENOENT") {
+        console.error("Error reading autonomous log:", err.message);
+      }
+    }
+    res.json(logs);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ── 404 ──────────────────────────────────────────────────────
 app.use(notFoundHandler);
 
@@ -144,6 +164,13 @@ let server;
       const keySource = process.env.NCBI_API_KEY ? "NCBI_API_KEY" : "VITE_NCBI_API_KEY";
       logger.info(`NCBI Biological Data Service active (${keySource} is configured)`);
     }
+
+    // Start autonomous CEO check scheduler
+    const { runAutonomousCEOCheck } = require("./services/ceoAutonomousService");
+    setTimeout(() => {
+      runAutonomousCEOCheck().catch(err => console.error("Error in initial Autonomous CEO Check:", err));
+    }, 5000); // 5 seconds initial delay
+    setInterval(runAutonomousCEOCheck, 45 * 60 * 1000); // every 45 minutes
   });
 })();
 
