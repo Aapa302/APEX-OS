@@ -387,6 +387,33 @@ async function makeApiCallWithFallback(body, urls, model, isRetry, quotaRetryDon
     const cleanUrl = url.split("?")[0];
     console.info(`[GeminiService] Attempting model [${model}] at endpoint: ${cleanUrl}`);
 
+    for (const url of urls) {
+      const cleanUrl = url.split("?")[0];
+      console.info(`[GeminiService] Attempting model [${model}] at endpoint: ${cleanUrl}`);
+
+      const geminiContents = toGeminiContents(messages);
+      if (system && system.trim()) {
+        if (geminiContents.length > 0 && geminiContents[0].role === "user") {
+          geminiContents[0].parts.unshift({ text: `System Instruction / System Prompt:\n${system}\n\n` });
+        } else {
+          geminiContents.unshift({ role: "user", parts: [{ text: `System Instruction / System Prompt:\n${system}` }] });
+        }
+      }
+
+      const body = {
+        contents: geminiContents,
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature: opts.temperature ?? 0.7,
+          topP: opts.top_p ?? 0.95,
+          ...(jsonMode && !url.includes("/v1/") ? { response_mime_type: "application/json" } : {})
+        }
+      };
+
+      let retryCount = 0;
+      // Keep max retries extremely low (1) per endpoint so that we quickly fall back
+      // to another model rather than stalling for 60 seconds.
+      const maxRetries = 1;
     let retryCount = 0;
     const maxRetries = 1;
 
