@@ -27,6 +27,19 @@ const messagesRouter = require("./routes/messages");
 const healthRouter = require("./routes/health");
 const exportRouter = require("./routes/export");
 const ncbiRouter = require("./routes/ncbi");
+const dnaRouter = require("./routes/dna");
+const architectureRouter = require("./routes/architecture");
+const companyRouter = require("./routes/company");
+const tasksRouter = require("./routes/tasks");
+const dnaHealthCheckRouter = require("./routes/dnaHealthCheck");
+const dnaHealthAutoScanRouter = require("./routes/dnaHealthAutoScan");
+const dnaSearchRouter = require("./routes/dnaSearch");
+const saveSimulationRouter = require("./routes/saveSimulation");
+const researchNotesRouter = require("./routes/researchNotes");
+const hypothesesRouter = require("./routes/hypotheses");
+const experimentsRouter = require("./routes/experiments");
+const debugRouter = require("./routes/debug");
+const { resolveModel } = require("./services/GeminiModelResolver");
 
 const app = express();
 
@@ -83,6 +96,18 @@ app.use("/health", healthRouter);
 app.use("/v1/messages", messagesRouter);
 app.use("/v1/export", exportRouter);
 app.use("/api/ncbi", ncbiRouter);
+app.use("/api/dna", dnaRouter);
+app.use("/api/architecture", architectureRouter);
+app.use("/api/company", companyRouter);
+app.use("/tasks", tasksRouter);
+app.use("/dna-health-check", dnaHealthCheckRouter);
+app.use("/api/dna-health", dnaHealthAutoScanRouter);
+app.use("/api/search-dna", dnaSearchRouter);
+app.use("/api/save-simulation", saveSimulationRouter);
+app.use("/api/research-notes", researchNotesRouter);
+app.use("/api/hypotheses", hypothesesRouter);
+app.use("/api/experiments", experimentsRouter);
+app.use("/api/debug", debugRouter);
 
 // ── 404 ──────────────────────────────────────────────────────
 app.use(notFoundHandler);
@@ -91,34 +116,48 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // ── Start ─────────────────────────────────────────────────────
-const server = app.listen(config.port, () => {
-  logger.info(`APEX Gemini Proxy running`, {
-    port: config.port,
-    env: config.nodeEnv,
-    provider: config.aiProvider,
-    model: config.geminiModel,
-    cors: config.corsOrigin,
-    rateLimitPerMin: config.rateLimitMaxRequests,
-  });
-  logger.info(`Proxy endpoint: http://localhost:${config.port}/v1/messages`);
-  logger.info(`Health check:   http://localhost:${config.port}/health`);
+let server;
 
-  // Warn if NCBI API Key is missing
-  if (!config.ncbiApiKey) {
-    logger.warn(`⚠️ Warning: NCBI API Key is not set. Routes under /api/ncbi/ will return errors until NCBI_API_KEY or VITE_NCBI_API_KEY is provided.`);
-  } else {
-    const keySource = process.env.NCBI_API_KEY ? "NCBI_API_KEY" : "VITE_NCBI_API_KEY";
-    logger.info(`NCBI Biological Data Service active (${keySource} is configured)`);
+(async () => {
+  try {
+    await resolveModel();
+  } catch (initErr) {
+    console.error("Critical: Failed to initialize Gemini model on startup:", initErr.message);
   }
-});
+
+  server = app.listen(config.port, () => {
+    logger.info(`APEX Gemini Proxy running`, {
+      port: config.port,
+      env: config.nodeEnv,
+      provider: config.aiProvider,
+      model: config.geminiModel,
+      cors: config.corsOrigin,
+      rateLimitPerMin: config.rateLimitMaxRequests,
+    });
+    logger.info(`Proxy endpoint: http://localhost:${config.port}/v1/messages`);
+    logger.info(`Health check:   http://localhost:${config.port}/health`);
+
+    // Warn if NCBI API Key is missing
+    if (!config.ncbiApiKey) {
+      logger.warn(`⚠️ Warning: NCBI API Key is not set. Routes under /api/ncbi/ will return errors until NCBI_API_KEY or VITE_NCBI_API_KEY is provided.`);
+    } else {
+      const keySource = process.env.NCBI_API_KEY ? "NCBI_API_KEY" : "VITE_NCBI_API_KEY";
+      logger.info(`NCBI Biological Data Service active (${keySource} is configured)`);
+    }
+  });
+})();
 
 // ── Graceful shutdown ─────────────────────────────────────────
 function shutdown(signal) {
   logger.info(`Received ${signal}. Shutting down gracefully…`);
-  server.close(() => {
-    logger.info("Server closed.");
+  if (server) {
+    server.close(() => {
+      logger.info("Server closed.");
+      process.exit(0);
+    });
+  } else {
     process.exit(0);
-  });
+  }
   setTimeout(() => {
     logger.error("Forced shutdown after timeout.");
     process.exit(1);
