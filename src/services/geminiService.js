@@ -382,11 +382,13 @@ async function generateContent(messages, system, opts = {}) {
 
 async function makeApiCallWithFallback(body, urls, model, isRetry, quotaRetryDone) {
   let lastError = null;
+  let retryCount = 0;
 
   for (const url of urls) {
     const cleanUrl = url.split("?")[0];
     console.info(`[GeminiService] Attempting model [${model}] at endpoint: ${cleanUrl}`);
 
+    retryCount = 0;
     for (const url of urls) {
       const cleanUrl = url.split("?")[0];
       console.info(`[GeminiService] Attempting model [${model}] at endpoint: ${cleanUrl}`);
