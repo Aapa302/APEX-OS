@@ -129,6 +129,24 @@ app.get("/autonomous-log", async (req, res, next) => {
   }
 });
 
+// POST /autonomous-trigger — manually triggers the autonomous CEO check
+app.post("/autonomous-trigger", async (req, res, next) => {
+  try {
+    const { runAutonomousCEOCheck } = require("./services/ceoAutonomousService");
+    // Trigger check in background
+    runAutonomousCEOCheck()
+      .then(() => console.log("[Autonomous CEO] Manual trigger completed."))
+      .catch(err => console.error("[Autonomous CEO] Manual trigger failed:", err));
+
+    res.json({
+      success: true,
+      message: "Autonomous CEO check triggered successfully in the background. Check logs via GET /autonomous-log soon."
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ── 404 ──────────────────────────────────────────────────────
 app.use(notFoundHandler);
 
