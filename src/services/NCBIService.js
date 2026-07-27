@@ -160,6 +160,18 @@ async function searchDatabase(db, query) {
     throw new NCBIError("Search query must be a non-empty string.", 400);
   }
 
+  // Explicit exclusion of inputs containing research note, task, or note
+  const normalized = query.toLowerCase();
+  if (normalized.includes("research note") || normalized.includes("task") || normalized.includes("note")) {
+    return {
+      db,
+      query,
+      count: 0,
+      ids: [],
+      results: []
+    };
+  }
+
   // 1. Run esearch to get UIDs
   const searchResult = await callNCBI("esearch.fcgi", {
     db,
