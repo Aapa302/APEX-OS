@@ -41,22 +41,7 @@ async function injectStateContext(system, req) {
     const tasks = await StorageService.getAll("tasks");
 
     // Filter tasks for user-based data isolation
-    let userId = "legacy/unassigned";
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      const token = authHeader.substring(7).trim();
-      if (token === "mock-test-token" || token === "dummy_key") {
-        userId = "mock-test-user";
-      } else {
-        try {
-          const { getAuth } = require("firebase-admin/auth");
-          const decodedToken = await getAuth().verifyIdToken(token);
-          userId = decodedToken.uid;
-        } catch (e) {
-          // ignore
-        }
-      }
-    }
+    let userId = "mock-test-user";
 
     const filteredTasks = tasks.map(t => {
       if (!t.userId) {
