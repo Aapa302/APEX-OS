@@ -35,8 +35,8 @@ router.post("/", async (req, res, next) => {
     // Read simulations
     const allSimulations = await StorageService.getAll("simulations");
 
-    // Filter simulations for User-based Data Isolation
-    const simulations = allSimulations.filter(sim => !sim.userId || sim.userId === req.userId);
+    // Use all simulations as multi-user auth is removed
+    const simulations = allSimulations;
 
     const matches = [];
 
