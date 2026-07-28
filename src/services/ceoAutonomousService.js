@@ -60,8 +60,43 @@ async function runAutonomousCEOCheck() {
       }
     }
 
+    // D. Fetch recent research notes & experiments for proactive thinking context
+    let recentResearchNotes = [];
+    let recentExperiments = [];
+    try {
+      const allNotes = await StorageService.getAll("research_notes");
+      recentResearchNotes = allNotes.slice(-5).map(n => ({ id: n.id, title: n.title, category: n.category, date: n.date }));
+    } catch (e) {
+      console.warn("[Autonomous CEO] Warning reading research_notes:", e.message);
+    }
+
+    try {
+      const allExps = await StorageService.getAll("experiments");
+      recentExperiments = allExps.slice(-5).map(e => ({ id: e.id, hypothesis: e.hypothesis, accuracy: e.accuracy, status: e.status }));
+    } catch (e) {
+      console.warn("[Autonomous CEO] Warning reading experiments:", e.message);
+    }
+
+    // E. Resolve company profile settings
+    let companyProfile = {
+      name: "APEX BioStorage Corp",
+      industry: "Biotechnology & DNA Storage",
+      stage: "Growth / Scaled Production",
+      mission: "To revolutionize global data archival by encoding digital assets into ultra-stable biological DNA sequences with bit-perfect integrity.",
+      goals: "Build, simulate, and deploy the most stable, error-tolerant DNA storage pipelines (Base-4, Huffman, Reed-Solomon, Homopolymer-Safe)."
+    };
+    try {
+      const dbProfile = await StorageService.getById("company", "profile");
+      if (dbProfile) {
+        companyProfile = { ...companyProfile, ...dbProfile };
+      }
+    } catch (e) {
+      // Ignore
+    }
+
     const stateSummary = {
       timestamp: new Date().toISOString(),
+      companyProfile,
       tasksSummary: {
         total: allTasks.length,
         todo: allTasks.filter(t => (t.status || t.column) === "todo").length,
@@ -76,6 +111,8 @@ async function runAutonomousCEOCheck() {
         assignee: t.assignee,
         priority: t.priority
       })),
+      recentResearchNotes,
+      recentExperiments,
       latestDnaHealth: latestHealthLog ? {
         timestamp: latestHealthLog.timestamp,
         scanned_count: latestHealthLog.scanned_count,
@@ -87,25 +124,45 @@ async function runAutonomousCEOCheck() {
 
     // 2. Pass this state to Gemini
     const systemPrompt = `You are APEX — the autonomous AI Chief Executive Officer of the company.
-Your job is to review the current company state periodically and take safe, proactive actions on your own — without waiting for the user to ask — but ONLY within a strict, limited set of safe actions.
+Your job is to review the current company state periodically and take safe, proactive actions on your own — without waiting for the user to ask. You should address BOTH reactive requirements (fixing stale tasks or triggering DNA health checks) and proactive requirements (identifying new strategic opportunities, improvement ideas, or risks).
+
+STATED COMPANY MISSION & GOALS:
+- Company Name: ${companyProfile.name}
+- Industry: ${companyProfile.industry}
+- Stage: ${companyProfile.stage}
+- Mission: ${companyProfile.mission}
+- Primary Goals: ${companyProfile.goals}
+
+YOUR DUAL MANDATE:
+1. REACTIVE CYCLE:
+   - Check if any tasks are stale (e.g. in To Do status for > 48 hours without update). Propose a reminder task or follow-up note if needed.
+   - Check if the DNA health check is stale/outdated (more than 24 hours old). If so, trigger a DNA health scan to repair the simulations.
+
+2. PROACTIVE "THINKING" CYCLE:
+   - Proactively consider the company's stated mission/goals and current state (recent tasks, research notes, experiments, DNA health).
+   - Identify exactly ONE new strategic opportunity, improvement idea, or risk worth flagging (something you "think of" on your own).
+   - Evaluate if this new idea/risk is worth acting on right now.
+   - If nothing new is worth proposing this cycle, you must explicitly output "No new proactive idea this cycle" in your summary. Do not force or invent low-quality ideas just to fill space.
+   - If you identify a high-quality idea/risk worth acting on, you may take ONE safe action to address it: either create a new task (create_task) to propose the idea/next step, or create a research note (create_research_note) to document your analysis/risk assessment.
+   - CRITICAL LABELING RULE: Any proactive task or research note you create MUST have its title prefixed with "💡 Proactive Idea: " (e.g. "💡 Proactive Idea: Explore Base-64 Encrypted DNA Storage"). This is essential for distinct display in the UI.
 
 THE AVAILABLE SAFE ACTIONS ARE:
-1. create_task: Use this to create a reminder/follow-up task if something is stale, overdue, or if a new action is required.
-2. create_research_note: Use this to log strategic observations, recommendations, or insights about the current state.
-3. trigger_dna_health_scan: Use this to trigger a full DNA health check scan to scan and repair DNA simulations. Only trigger this if the last scan is more than 24 hours old.
+1. create_task: Create a reminder/follow-up task or propose a proactive strategic idea. (For proactive ideas, title MUST be prefixed with "💡 Proactive Idea: ").
+2. create_research_note: Log strategic observations or a proactive risk analysis. (For proactive ideas, title MUST be prefixed with "💡 Proactive Idea: ").
+3. trigger_dna_health_scan: Trigger a DNA health scan to scan/repair simulations.
 
-MANDATORY RULES:
+MANDATORY SAFETY RULES:
 - You must NOT try to update or delete tasks.
-- You can take a MAXIMUM of 2 actions per run.
-- If no action is warranted, simply explain your decision (e.g., "Company is in an optimal state, no autonomous actions needed.") and do not call any tools.
-- Output a clear summary of your strategic review and decision-making process first, then call the appropriate tools if needed.`;
+- You can take a MAXIMUM of 2 actions per run (reactive + proactive combined).
+- If no action is warranted, explain your decision clearly.
+- Output a clear summary of your strategic review, your decision-making process, and any proactive thoughts first, then call the appropriate tools if needed.`;
 
     const userMessage = `Here is the current gathered company state:
 \`\`\`json
 ${JSON.stringify(stateSummary, null, 2)}
 \`\`\`
 
-Review this state. Check if any tasks have been in To Do for over 48 hours and need attention, or if DNA health check is outdated. Take appropriate safe actions if needed (max 2 tool calls total).`;
+Review this state. Check if any tasks have been in To Do for over 48 hours and need attention, or if DNA health check is outdated. Additionally, proactively think of exactly ONE new opportunity, improvement, or risk. Take appropriate safe actions if needed (max 2 tool calls total).`;
 
     const opts = {
       isAutonomous: true,
@@ -123,12 +180,37 @@ Review this state. Check if any tasks have been in To Do for over 48 hours and n
 
     const decisionText = response.content?.[0]?.text || "No response content from Gemini.";
 
-    // 3. Log the run
+    // 3. Map and label any executed actions
+    const loggedActions = (opts.actionsTaken || []).map(action => {
+      let isProactive = false;
+      const title = action.args?.title || "";
+      if (title.startsWith("💡 Proactive Idea:") || title.includes("💡 Proactive Idea:")) {
+        isProactive = true;
+      }
+      return {
+        ...action,
+        label: isProactive ? "💡 Proactive Idea:" : "🤖 Autonomous Action:"
+      };
+    });
+
+    let proactiveIdeaFound = "No new proactive idea this cycle";
+    const proactiveAction = loggedActions.find(a => a.label === "💡 Proactive Idea:");
+    if (proactiveAction) {
+      proactiveIdeaFound = proactiveAction.args?.title || "Proactive Idea proposed";
+    } else if (decisionText && !decisionText.includes("No new proactive idea this cycle")) {
+      const match = decisionText.match(/(?:💡 Proactive Idea:|proactive idea:|opportunity:)\s*([^\n.]+)/i);
+      if (match && match[1]) {
+        proactiveIdeaFound = "💡 Proactive Idea: " + match[1].trim();
+      }
+    }
+
+    // Log the run
     const logEntry = {
       timestamp: new Date().toISOString(),
       reviewedState: stateSummary,
       decision: decisionText,
-      actionsTaken: opts.actionsTaken || [],
+      proactive_idea_considered: proactiveIdeaFound,
+      actionsTaken: loggedActions,
       rejectedAttempts: opts.rejectedAttempts || []
     };
 
