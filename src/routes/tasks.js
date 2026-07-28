@@ -142,6 +142,29 @@ router.patch("/:id", async (req, res, next) => {
       }
     }
 
+    // Check for Engineer -> Reviewer task handoff
+    const isCompletedOrReview = updates.column === "done" || updates.column === "review";
+    if (isCompletedOrReview && finalAssignee.toLowerCase().trim() === "engineer" && !task.handedOff) {
+      updates.handedOff = true;
+      try {
+        const originalTitle = updates.title !== undefined ? updates.title : task.title;
+        const originalDescription = updates.description !== undefined ? updates.description : (task.description || "");
+        const originalPhase = updates.phase !== undefined ? updates.phase : (task.phase || "Engineering");
+
+        await createTaskInternal({
+          title: `[HANDOFF] Review and QA: ${originalTitle}`,
+          description: `Reference to completed engineering task ID: ${task.id}\n\nOriginal Description:\n${originalDescription}`,
+          phase: originalPhase,
+          column: "todo",
+          assignee: "reviewer",
+          priority: (updates.priority !== undefined ? updates.priority : task.priority) || "medium"
+        });
+        console.log(`[Handoff Rules Engine] Successfully handed off task ${task.id} to reviewer.`);
+      } catch (err) {
+        console.error(`[Handoff Rules Engine] Failed to create handoff task to reviewer: ${err.message}`);
+      }
+    }
+
     const updatedTask = await StorageService.update("tasks", id, updates);
 
     res.json(updatedTask);
