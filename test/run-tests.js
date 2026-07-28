@@ -579,6 +579,69 @@ async function runTests() {
     const deletedTaskLookup = finalTasks.find(t => t.id === taskData.id);
     assert.ok(!deletedTaskLookup, "Deleted task should no longer exist in the tasks list");
 
+    // H. Test Researcher -> Engineer Task Handoff
+    console.log("  - PATCH /tasks/:id (Researcher -> Engineer task handoff)");
+
+    // 1. Create a researcher task
+    const researcherTaskRes = await fetch(BASE_TASKS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "BRCA1 Sequence Structural Study",
+        description: "Study BRCA1 sequence and record structural characteristics.",
+        phase: "Research",
+        column: "inprogress",
+        assignee: "researcher",
+        priority: "high"
+      })
+    });
+    assert.strictEqual(researcherTaskRes.status, 201);
+    const researcherTask = await researcherTaskRes.json();
+    assert.strictEqual(researcherTask.assignee, "researcher");
+
+    // 2. Complete the researcher task via PATCH (sets status/column to "completed")
+    const completeTaskRes = await fetch(`${BASE_TASKS_URL}/${researcherTask.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        column: "completed"
+      })
+    });
+    assert.strictEqual(completeTaskRes.status, 200);
+    const completedTask = await completeTaskRes.json();
+    assert.strictEqual(completedTask.column, "done");
+    assert.strictEqual(completedTask.handedOff, true);
+
+    // 3. Verify a new task with assignee "engineer" and column "todo" is created automatically
+    const fetchAfterHandoffRes = await fetch(BASE_TASKS_URL);
+    const tasksAfterHandoff = await fetchAfterHandoffRes.json();
+
+    const handoffTask = tasksAfterHandoff.find(t => t.title === `[HANDOFF] Implement based on research: ${researcherTask.title}`);
+    assert.ok(handoffTask, "Handoff task should be created");
+    assert.strictEqual(handoffTask.assignee, "engineer");
+    assert.strictEqual(handoffTask.column, "todo");
+    assert.ok(handoffTask.description.includes(researcherTask.id), "Description should reference original task id");
+    assert.ok(handoffTask.description.includes(researcherTask.description), "Description should reference original description");
+
+    // 4. Verify no duplicate handoff task is created if we PATCH the researcher task again
+    const completeAgainRes = await fetch(`${BASE_TASKS_URL}/${researcherTask.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        priority: "low"
+      })
+    });
+    assert.strictEqual(completeAgainRes.status, 200);
+
+    const fetchAfterSecondPatchRes = await fetch(BASE_TASKS_URL);
+    const tasksAfterSecondPatch = await fetchAfterSecondPatchRes.json();
+    const matchingHandoffs = tasksAfterSecondPatch.filter(t => t.title === `[HANDOFF] Implement based on research: ${researcherTask.title}`);
+    assert.strictEqual(matchingHandoffs.length, 1, "There should be exactly one handoff task (no duplicate created)");
+
+    // 5. Clean up the researcher task and the handoff task
+    await fetch(`${BASE_TASKS_URL}/${researcherTask.id}`, { method: "DELETE" });
+    await fetch(`${BASE_TASKS_URL}/${handoffTask.id}`, { method: "DELETE" });
+
     console.log("✅ Passed: Tasks Express Routes integration\n");
 
     // ── 13. Test DNA Health Check Express Routes ───────────────
