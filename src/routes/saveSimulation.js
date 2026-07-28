@@ -97,7 +97,6 @@ router.post("/", async (req, res, next) => {
       triplicates: [sequence, sequence, sequence], // Standard triplicates
       original: "", // Can be filled or left empty
       strategy: "base4", // Default strategy
-      userId: req.userId, // Save the userId of creator
       timestamp: timestampValue
     };
 

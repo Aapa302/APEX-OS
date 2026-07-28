@@ -37,7 +37,7 @@ async function injectStateContext(system, req) {
     const path = require("path");
     const fs = require("fs").promises;
 
-    // Retrieve all tasks
+    // Retrieve all tasks (all tasks are processed without any userId filtering or user isolation)
     const tasks = await StorageService.getAll("tasks");
 
     const totalTasks = tasks.length;

@@ -130,7 +130,7 @@ router.post("/", async (req, res, next) => {
       });
     }
 
-    // Use all simulations as multi-user auth is removed
+    // Use all simulations as multi-user auth and userId-based filtering are completely removed
     const simulations = allSimulations;
 
     const scanned_count = simulations.length;
