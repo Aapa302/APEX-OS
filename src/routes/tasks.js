@@ -8,6 +8,9 @@ const router = express.Router();
 router.use(verifyFirebaseToken);
 
 // GET /tasks — returns all tasks
+// Note: All tasks are fetched and returned. Per-user or userId-based filtering is completely
+// and intentionally disabled/removed here as the app doesn't use per-user authentication.
+// This ensures that all tasks (including legacy tasks with old Firebase UIDs) are fully visible.
 router.get("/", async (req, res, next) => {
   try {
     const tasks = await StorageService.getAll("tasks");
@@ -52,7 +55,6 @@ router.post("/", async (req, res, next) => {
       column: taskColumn,
       assignee: (assignee || "Unassigned").trim(),
       priority: (priority || "medium").toLowerCase().trim(),
-      userId: req.userId, // Save userId
       createdAt: new Date().toISOString()
     };
 

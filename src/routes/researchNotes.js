@@ -8,6 +8,9 @@ const router = express.Router();
 router.use(verifyFirebaseToken);
 
 // GET /api/research-notes - Returns all records from research_notes collection
+// Note: All research notes are fetched and returned. Per-user or userId-based filtering is completely
+// and intentionally disabled/removed here as the app doesn't use per-user authentication.
+// This ensures that all notes (including legacy notes with old Firebase UIDs) are fully visible.
 router.get("/", async (req, res, next) => {
   try {
     const reports = await StorageService.getAll("research_notes");
@@ -39,7 +42,6 @@ router.post("/", async (req, res, next) => {
       title: title.trim(),
       category: category.trim(),
       content: content.trim(),
-      userId: req.userId, // Save userId
       date: new Date().toISOString()
     };
 
