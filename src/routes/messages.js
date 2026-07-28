@@ -40,21 +40,11 @@ async function injectStateContext(system, req) {
     // Retrieve all tasks
     const tasks = await StorageService.getAll("tasks");
 
-    // Filter tasks for user-based data isolation
-    let userId = "mock-test-user";
-
-    const filteredTasks = tasks.map(t => {
-      if (!t.userId) {
-        return { ...t, userId: "legacy/unassigned" };
-      }
-      return t;
-    }).filter(t => t.userId === userId || t.userId === "legacy/unassigned");
-
-    const totalTasks = filteredTasks.length;
-    const todoTasks = filteredTasks.filter(t => t.column === 'todo' || t.status === 'todo').length;
-    const inprogressTasks = filteredTasks.filter(t => t.column === 'inprogress' || t.status === 'inprogress').length;
-    const reviewTasks = filteredTasks.filter(t => t.column === 'review' || t.status === 'review').length;
-    const doneTasks = filteredTasks.filter(t => t.column === 'done' || t.status === 'done').length;
+    const totalTasks = tasks.length;
+    const todoTasks = tasks.filter(t => t.column === 'todo' || t.status === 'todo').length;
+    const inprogressTasks = tasks.filter(t => t.column === 'inprogress' || t.status === 'inprogress').length;
+    const reviewTasks = tasks.filter(t => t.column === 'review' || t.status === 'review').length;
+    const doneTasks = tasks.filter(t => t.column === 'done' || t.status === 'done').length;
 
     let latestHealth = "No health check run yet.";
     try {

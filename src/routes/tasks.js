@@ -7,19 +7,11 @@ const router = express.Router();
 // Apply auth middleware to all tasks routes
 router.use(verifyFirebaseToken);
 
-// GET /tasks — returns all tasks for the authenticated user
+// GET /tasks — returns all tasks
 router.get("/", async (req, res, next) => {
   try {
     const tasks = await StorageService.getAll("tasks");
-    // Filter tasks: user's own tasks OR legacy/unassigned documents
-    const filtered = tasks.map(t => {
-      if (!t.userId) {
-        return { ...t, userId: "legacy/unassigned" };
-      }
-      return t;
-    }).filter(t => t.userId === req.userId || t.userId === "legacy/unassigned");
-
-    res.json(filtered);
+    res.json(tasks);
   } catch (error) {
     next(error);
   }
@@ -36,9 +28,8 @@ router.post("/", async (req, res, next) => {
 
     const tasks = await StorageService.getAll("tasks");
 
-    // duplicate check within user's own visible tasks
-    const userTasks = tasks.filter(t => t.userId === req.userId || !t.userId);
-    const duplicate = userTasks.some(
+    // duplicate check within all tasks
+    const duplicate = tasks.some(
       t => t.title.trim().toLowerCase() === title.trim().toLowerCase() &&
            t.phase.trim().toLowerCase() === phase.trim().toLowerCase()
     );
@@ -84,15 +75,7 @@ router.patch("/:id", async (req, res, next) => {
       return res.status(404).json({ error: "Task not found." });
     }
 
-    // Check ownership (allow if same user or legacy document)
-    if (task.userId && task.userId !== req.userId) {
-      return res.status(403).json({
-        error: {
-          type: "forbidden",
-          message: "You do not have permission to modify or delete this document."
-        }
-      });
-    }
+    // No ownership check needed as multi-user auth is removed
 
     const updates = {};
 
@@ -134,15 +117,7 @@ router.delete("/:id", async (req, res, next) => {
       return res.status(404).json({ error: "Task not found." });
     }
 
-    // Check ownership (allow if same user or legacy document)
-    if (task.userId && task.userId !== req.userId) {
-      return res.status(403).json({
-        error: {
-          type: "forbidden",
-          message: "You do not have permission to modify or delete this document."
-        }
-      });
-    }
+    // No ownership check needed as multi-user auth is removed
 
     await StorageService.delete("tasks", id);
 

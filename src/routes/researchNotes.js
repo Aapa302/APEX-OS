@@ -11,16 +11,7 @@ router.use(verifyFirebaseToken);
 router.get("/", async (req, res, next) => {
   try {
     const reports = await StorageService.getAll("research_notes");
-
-    // Filter research notes: user's own notes OR legacy/unassigned documents
-    const filtered = reports.map(r => {
-      if (!r.userId) {
-        return { ...r, userId: "legacy/unassigned" };
-      }
-      return r;
-    }).filter(r => r.userId === req.userId || r.userId === "legacy/unassigned");
-
-    res.json(filtered);
+    res.json(reports);
   } catch (error) {
     next(error);
   }
@@ -87,15 +78,7 @@ router.delete("/:id", async (req, res, next) => {
       });
     }
 
-    // Check ownership (allow if same user or legacy document)
-    if (report.userId && report.userId !== req.userId) {
-      return res.status(403).json({
-        error: {
-          type: "forbidden",
-          message: "You do not have permission to modify or delete this document."
-        }
-      });
-    }
+    // No ownership check needed as multi-user auth is removed
 
     await StorageService.delete("research_notes", id);
 
