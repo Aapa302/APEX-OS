@@ -39,6 +39,7 @@ const researchNotesRouter = require("./routes/researchNotes");
 const hypothesesRouter = require("./routes/hypotheses");
 const experimentsRouter = require("./routes/experiments");
 const debugRouter = require("./routes/debug");
+const ceoChatRouter = require("./routes/ceoChat");
 const { resolveModel } = require("./services/GeminiModelResolver");
 
 const app = express();
@@ -108,6 +109,7 @@ app.use("/api/research-notes", researchNotesRouter);
 app.use("/api/hypotheses", hypothesesRouter);
 app.use("/api/experiments", experimentsRouter);
 app.use("/api/debug", debugRouter);
+app.use("/api/ceo-chat", ceoChatRouter);
 
 app.get("/autonomous-log", async (req, res, next) => {
   try {
