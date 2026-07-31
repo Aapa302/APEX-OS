@@ -13,5 +13,30 @@
     "timestamp": "2026-07-31T11:09:01.517Z",
     "error": "API key not valid. Please pass a valid API key.",
     "stack": "GeminiError: API key not valid. Please pass a valid API key.\n    at makeApiCallWithFallback (/app/src/services/geminiService.js:481:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async generateContentWithRetry (/app/src/services/geminiService.js:564:18)\n    at async generateContent (/app/src/services/geminiService.js:375:18)\n    at async runAutonomousCEOCheck (/app/src/services/ceoAutonomousService.js:206:22)"
+  },
+  {
+    "timestamp": "2026-07-31T11:39:17.588Z",
+    "error": "API key not valid. Please pass a valid API key.",
+    "stack": "GeminiError: API key not valid. Please pass a valid API key.\n    at makeApiCallWithFallback (/app/src/services/geminiService.js:481:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async generateContentWithRetry (/app/src/services/geminiService.js:564:18)\n    at async generateContent (/app/src/services/geminiService.js:375:18)\n    at async runAutonomousCEOCheck (/app/src/services/ceoAutonomousService.js:206:22)"
+  },
+  {
+    "timestamp": "2026-07-31T11:39:33.386Z",
+    "error": "API key not valid. Please pass a valid API key.",
+    "stack": "GeminiError: API key not valid. Please pass a valid API key.\n    at makeApiCallWithFallback (/app/src/services/geminiService.js:481:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async generateContentWithRetry (/app/src/services/geminiService.js:564:18)\n    at async generateContent (/app/src/services/geminiService.js:375:18)\n    at async runAutonomousCEOCheck (/app/src/services/ceoAutonomousService.js:206:22)"
+  },
+  {
+    "timestamp": "2026-07-31T11:42:24.336Z",
+    "error": "API key not valid. Please pass a valid API key.",
+    "stack": "GeminiError: API key not valid. Please pass a valid API key.\n    at makeApiCallWithFallback (/app/src/services/geminiService.js:481:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async generateContentWithRetry (/app/src/services/geminiService.js:564:18)\n    at async generateContent (/app/src/services/geminiService.js:375:18)\n    at async runAutonomousCEOCheck (/app/src/services/ceoAutonomousService.js:206:22)"
+  },
+  {
+    "timestamp": "2026-07-31T11:44:03.799Z",
+    "error": "API key not valid. Please pass a valid API key.",
+    "stack": "GeminiError: API key not valid. Please pass a valid API key.\n    at makeApiCallWithFallback (/app/src/services/geminiService.js:481:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async generateContentWithRetry (/app/src/services/geminiService.js:564:18)\n    at async generateContent (/app/src/services/geminiService.js:375:18)\n    at async runAutonomousCEOCheck (/app/src/services/ceoAutonomousService.js:206:22)"
+  },
+  {
+    "timestamp": "2026-07-31T11:47:11.600Z",
+    "error": "API key not valid. Please pass a valid API key.",
+    "stack": "GeminiError: API key not valid. Please pass a valid API key.\n    at makeApiCallWithFallback (/app/src/services/geminiService.js:481:21)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async generateContentWithRetry (/app/src/services/geminiService.js:564:18)\n    at async generateContent (/app/src/services/geminiService.js:375:18)\n    at async runAutonomousCEOCheck (/app/src/services/ceoAutonomousService.js:206:22)"
   }
 ]

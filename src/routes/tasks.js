@@ -86,7 +86,58 @@ const HANDOFF_CHAINS = [
     triggerColumns: ["done", "completed"],
     titlePrefix: "[HANDOFF] Implement based on research: ",
     descriptionPrefix: "Reference to completed research task ID: ",
-    defaultPhase: "Research"
+    defaultPhase: "Research",
+    matches: (task, updates) => {
+      const title = (updates.title !== undefined ? updates.title : task.title) || "";
+      const lower = title.toLowerCase();
+      const isPhase5 = lower.includes("retrieve nucleotide specs") || lower.includes("gather requirements") || lower.includes("biological storage specs");
+      return !isPhase5;
+    }
+  },
+  {
+    fromAssignee: "researcher",
+    toAssignee: "architect",
+    triggerColumns: ["done", "completed"],
+    titlePrefix: "[HANDOFF] Compile Reed-Solomon mapping specs based on: ",
+    descriptionPrefix: "Reference to completed research task ID: ",
+    defaultPhase: "Algorithm",
+    matches: (task, updates) => {
+      const title = (updates.title !== undefined ? updates.title : task.title) || "";
+      const lower = title.toLowerCase();
+      const isPhase5 = lower.includes("retrieve nucleotide specs") || lower.includes("gather requirements") || lower.includes("biological storage specs");
+      return isPhase5;
+    }
+  },
+  {
+    fromAssignee: "architect",
+    toAssignee: "biologist",
+    triggerColumns: ["done", "completed"],
+    titlePrefix: "[HANDOFF] Synthesize payload into DNA for: ",
+    descriptionPrefix: "Reference to completed algorithm task ID: ",
+    defaultPhase: "DNA Synthesis"
+  },
+  {
+    fromAssignee: "biologist",
+    toAssignee: "data_sci",
+    triggerColumns: ["done", "completed"],
+    titlePrefix: "[HANDOFF] Simulate thermal PCR cycles for: ",
+    descriptionPrefix: "Reference to completed DNA synthesis task ID: ",
+    defaultPhase: "Simulation"
+  },
+  {
+    fromAssignee: "data_sci",
+    toAssignee: "storage_arch",
+    triggerColumns: ["done", "completed"],
+    titlePrefix: "[HANDOFF] Assess pipeline parameters & log production-lock decision for: ",
+    descriptionPrefix: "Reference to completed simulation task ID: ",
+    defaultPhase: "Architecture Recommendation"
+  },
+  {
+    fromAssignee: "storage_arch",
+    toAssignee: null,
+    chainComplete: true,
+    triggerColumns: ["done", "completed"],
+    titleMatchPrefix: "[HANDOFF] Assess pipeline parameters & log production-lock decision for:"
   },
   {
     fromAssignee: "engineer",
@@ -159,6 +210,11 @@ router.patch("/:id", async (req, res, next) => {
         const isTriggerColumn = rule.triggerColumns.includes(updates.column);
 
         if (isTriggerColumn && finalAssignee.toLowerCase().trim() === rule.fromAssignee) {
+          // Custom rule match evaluation
+          if (rule.matches && !rule.matches(task, updates)) {
+            continue;
+          }
+
           if (rule.chainComplete) {
             const taskTitle = task.title || "";
             if (taskTitle.startsWith(rule.titleMatchPrefix)) {
