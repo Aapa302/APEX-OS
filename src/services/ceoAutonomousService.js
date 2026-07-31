@@ -6,6 +6,11 @@ const { generateContent } = require("./geminiService");
 const LOG_FILE = path.join(__dirname, "../../ceo-autonomous-log.json");
 const HEALTH_LOGS_FILE = path.join(__dirname, "../../dna-health-logs.json");
 
+// Tracker for already-nudged stuck tasks to avoid cycle duplicate spamming
+const nudgedTaskIds = new Set();
+// Threshold constant for detecting stuck tasks (2 hours)
+const STUCK_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+
 // Helper to write/append to ceo-autonomous-log.json safely
 async function appendAutonomousLog(entry) {
   try {
@@ -42,6 +47,32 @@ async function runAutonomousCEOCheck() {
       const createdTime = t.createdAt ? new Date(t.createdAt).getTime() : 0;
       return createdTime > 0 && createdTime < fortyEightHoursAgo;
     });
+
+    // B2. Filter and dispatch proactive alerts for "stuck" tasks (sitting untouched in non-terminal column for > 2 hours)
+    const stuckTasks = allTasks.filter(t => {
+      const status = t.status || t.column;
+      if (status !== "todo" && status !== "inprogress") return false;
+      const taskTime = new Date(t.updatedAt || t.createdAt).getTime();
+      return taskTime > 0 && (now - taskTime) > STUCK_THRESHOLD_MS && !nudgedTaskIds.has(t.id);
+    });
+
+    for (const t of stuckTasks) {
+      nudgedTaskIds.add(t.id);
+      const timeSpentHours = ((now - new Date(t.updatedAt || t.createdAt).getTime()) / (1000 * 60 * 60)).toFixed(1);
+      const nudgeContent = `⚠️ Stuck Task Alert: "${t.title}" assigned to '${t.assignee}' has been sitting in non-terminal column '${t.status || t.column}' for ${timeSpentHours} hours. This needs a strategic nudge!`;
+
+      // Deliver via the existing delivery mechanism (creating a persistent chat message in the CEO Chat history)
+      const nudgeMessage = {
+        id: "nudge_" + Date.now().toString() + "_" + Math.random().toString(36).substring(2, 7),
+        role: "assistant",
+        content: nudgeContent,
+        autonomous: true,
+        source: "autonomous",
+        timestamp: new Date().toISOString()
+      };
+      await StorageService.save("ceo_chats", nudgeMessage);
+      console.info(`[Autonomous CEO] Dispatched stuck task nudge for: ${t.title}`);
+    }
 
     // C. Latest DNA health scan summary and last scan timestamp
     let latestHealthLog = null;
