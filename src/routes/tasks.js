@@ -165,6 +165,15 @@ router.patch("/:id", async (req, res, next) => {
       }
     }
 
+    // Check if Reviewer's handoff task is completed (Phase 2.3)
+    const isColDone = updates.column === "done" || updates.column === "completed";
+    if (isColDone && finalAssignee.toLowerCase().trim() === "reviewer" && task.title.startsWith("[HANDOFF] Review and QA:")) {
+      const originalFeatureName = task.title.replace(/^\[HANDOFF\] Review and QA:\s*/i, "").trim();
+      updates.chainComplete = true;
+      updates.chainCompleteMessage = `✅ Collaboration Complete: ${originalFeatureName} — Researched, built, and reviewed. Ready to ship.`;
+      console.log(`[Handoff Rules Engine] Handoff chain complete for: ${originalFeatureName}`);
+    }
+
     const updatedTask = await StorageService.update("tasks", id, updates);
 
     res.json(updatedTask);
