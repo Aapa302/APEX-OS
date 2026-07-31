@@ -79,6 +79,32 @@ router.post("/", async (req, res, next) => {
   }
 });
 
+const HANDOFF_CHAINS = [
+  {
+    fromAssignee: "researcher",
+    toAssignee: "engineer",
+    triggerColumns: ["done", "completed"],
+    titlePrefix: "[HANDOFF] Implement based on research: ",
+    descriptionPrefix: "Reference to completed research task ID: ",
+    defaultPhase: "Research"
+  },
+  {
+    fromAssignee: "engineer",
+    toAssignee: "reviewer",
+    triggerColumns: ["done", "completed", "review"],
+    titlePrefix: "[HANDOFF] Review and QA: ",
+    descriptionPrefix: "Reference to completed engineering task ID: ",
+    defaultPhase: "Engineering"
+  },
+  {
+    fromAssignee: "reviewer",
+    toAssignee: null,
+    chainComplete: true,
+    triggerColumns: ["done", "completed"],
+    titleMatchPrefix: "[HANDOFF] Review and QA:"
+  }
+];
+
 /**
  * PATCH /tasks/:id — updates column/status of a task
  *
@@ -126,70 +152,41 @@ router.patch("/:id", async (req, res, next) => {
     if (assignee !== undefined) updates.assignee = assignee.trim();
     if (priority !== undefined) updates.priority = priority.toLowerCase().trim();
 
-    // Phase 2.1 — Researcher -> Engineer Task Handoff (Failure-isolated)
-    try {
-      const finalAssignee = (updates.assignee !== undefined ? updates.assignee : task.assignee) || "";
-      const isCompleted = updates.column === "done" || updates.column === "completed";
+    // Config-driven Handoff Engine (Phase 2.1, 2.2, and 2.3)
+    for (const rule of HANDOFF_CHAINS) {
+      try {
+        const finalAssignee = (updates.assignee !== undefined ? updates.assignee : task.assignee) || "";
+        const isTriggerColumn = rule.triggerColumns.includes(updates.column);
 
-      if (isCompleted && finalAssignee.toLowerCase().trim() === "researcher" && !task.handedOff) {
-        updates.handedOff = true;
-        const originalTitle = updates.title !== undefined ? updates.title : (task.title || "");
-        const originalDescription = updates.description !== undefined ? updates.description : (task.description || "");
-        const originalPhase = updates.phase !== undefined ? updates.phase : (task.phase || "Research");
+        if (isTriggerColumn && finalAssignee.toLowerCase().trim() === rule.fromAssignee) {
+          if (rule.chainComplete) {
+            const taskTitle = task.title || "";
+            if (taskTitle.startsWith(rule.titleMatchPrefix)) {
+              const originalFeatureName = taskTitle.replace(new RegExp(`^${rule.titleMatchPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i'), "").trim();
+              updates.chainComplete = true;
+              updates.chainCompleteMessage = `✅ Collaboration Complete: ${originalFeatureName} — Researched, built, and reviewed. Ready to ship.`;
+              console.log(`[Handoff Rules Engine] Handoff chain complete for: ${originalFeatureName}`);
+            }
+          } else if (!task.handedOff && !updates.handedOff) {
+            updates.handedOff = true;
+            const originalTitle = updates.title !== undefined ? updates.title : (task.title || "");
+            const originalDescription = updates.description !== undefined ? updates.description : (task.description || "");
+            const originalPhase = updates.phase !== undefined ? updates.phase : (task.phase || rule.defaultPhase);
 
-        await createTaskInternal({
-          title: `[HANDOFF] Implement based on research: ${originalTitle}`,
-          description: `Reference to completed research task ID: ${task.id}\n\nOriginal Description:\n${originalDescription}`,
-          phase: originalPhase,
-          column: "todo",
-          assignee: "engineer",
-          priority: (updates.priority !== undefined ? updates.priority : task.priority) || "medium"
-        });
-        console.log(`[Handoff Rules Engine] Successfully handed off task ${task.id} to engineer.`);
+            await createTaskInternal({
+              title: `${rule.titlePrefix}${originalTitle}`,
+              description: `${rule.descriptionPrefix}${task.id}\n\nOriginal Description:\n${originalDescription}`,
+              phase: originalPhase,
+              column: "todo",
+              assignee: rule.toAssignee,
+              priority: (updates.priority !== undefined ? updates.priority : task.priority) || "medium"
+            });
+            console.log(`[Handoff Rules Engine] Successfully handed off task ${task.id} to ${rule.toAssignee}.`);
+          }
+        }
+      } catch (err) {
+        console.error(`[Handoff Rules Engine] Failed handoff check for ${rule.fromAssignee}->${rule.toAssignee || "complete"}: ${err.message}`);
       }
-    } catch (err) {
-      console.error(`[Handoff Rules Engine] Failed Researcher->Engineer handoff check: ${err.message}`);
-    }
-
-    // Phase 2.2 — Engineer -> Reviewer Task Handoff (Failure-isolated)
-    try {
-      const finalAssignee = (updates.assignee !== undefined ? updates.assignee : task.assignee) || "";
-      const isCompletedOrReview = updates.column === "done" || updates.column === "completed" || updates.column === "review";
-
-      if (isCompletedOrReview && finalAssignee.toLowerCase().trim() === "engineer" && !task.handedOff) {
-        updates.handedOff = true;
-        const originalTitle = updates.title !== undefined ? updates.title : (task.title || "");
-        const originalDescription = updates.description !== undefined ? updates.description : (task.description || "");
-        const originalPhase = updates.phase !== undefined ? updates.phase : (task.phase || "Engineering");
-
-        await createTaskInternal({
-          title: `[HANDOFF] Review and QA: ${originalTitle}`,
-          description: `Reference to completed engineering task ID: ${task.id}\n\nOriginal Description:\n${originalDescription}`,
-          phase: originalPhase,
-          column: "todo",
-          assignee: "reviewer",
-          priority: (updates.priority !== undefined ? updates.priority : task.priority) || "medium"
-        });
-        console.log(`[Handoff Rules Engine] Successfully handed off task ${task.id} to reviewer.`);
-      }
-    } catch (err) {
-      console.error(`[Handoff Rules Engine] Failed Engineer->Reviewer handoff check: ${err.message}`);
-    }
-
-    // Phase 2.3 — Reviewer Task Completion / Auto-Follow-Up (Failure-isolated)
-    try {
-      const finalAssignee = (updates.assignee !== undefined ? updates.assignee : task.assignee) || "";
-      const isColDone = updates.column === "done" || updates.column === "completed";
-      const taskTitle = task.title || "";
-
-      if (isColDone && finalAssignee.toLowerCase().trim() === "reviewer" && taskTitle.startsWith("[HANDOFF] Review and QA:")) {
-        const originalFeatureName = taskTitle.replace(/^\[HANDOFF\] Review and QA:\s*/i, "").trim();
-        updates.chainComplete = true;
-        updates.chainCompleteMessage = `✅ Collaboration Complete: ${originalFeatureName} — Researched, built, and reviewed. Ready to ship.`;
-        console.log(`[Handoff Rules Engine] Handoff chain complete for: ${originalFeatureName}`);
-      }
-    } catch (err) {
-      console.error(`[Handoff Rules Engine] Failed Reviewer task completion check: ${err.message}`);
     }
 
     const updatedTask = await StorageService.update("tasks", id, updates);
