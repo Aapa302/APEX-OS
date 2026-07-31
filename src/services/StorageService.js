@@ -9,7 +9,8 @@ const FILE_MAP = {
   experiments: path.join(__dirname, "../../experiments.json"),
   tasks: path.join(__dirname, "../../tasks.json"),
   health_check_logs: path.join(__dirname, "../../health-check-logs.json"),
-  corruption_history: path.join(__dirname, "../../corruption-history.json")
+  corruption_history: path.join(__dirname, "../../corruption-history.json"),
+  ceo_chats: path.join(__dirname, "../../ceo-chats.json")
 };
 
 // Helper to load raw array from local JSON
