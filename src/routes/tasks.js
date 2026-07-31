@@ -79,7 +79,16 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-// PATCH /tasks/:id — updates column/status of a task
+/**
+ * PATCH /tasks/:id — updates column/status of a task
+ *
+ * Design Rule: The core task status update must always succeed and return a response
+ * as long as the task exists and the requested column is valid, REGARDLESS of whether
+ * any handoff / notification side-effects succeed or fail.
+ *
+ * To ensure this resilience, each handoff/notification logic block (Phase 2.1, 2.2,
+ * and 2.3) must be wrapped in its own individual try-catch block.
+ */
 router.patch("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -117,14 +126,14 @@ router.patch("/:id", async (req, res, next) => {
     if (assignee !== undefined) updates.assignee = assignee.trim();
     if (priority !== undefined) updates.priority = priority.toLowerCase().trim();
 
-    // Check for Researcher -> Engineer task handoff
-    const finalAssignee = (updates.assignee !== undefined ? updates.assignee : task.assignee) || "";
-    const isCompleted = updates.column === "done";
+    // Phase 2.1 — Researcher -> Engineer Task Handoff (Failure-isolated)
+    try {
+      const finalAssignee = (updates.assignee !== undefined ? updates.assignee : task.assignee) || "";
+      const isCompleted = updates.column === "done" || updates.column === "completed";
 
-    if (isCompleted && finalAssignee.toLowerCase().trim() === "researcher" && !task.handedOff) {
-      updates.handedOff = true;
-      try {
-        const originalTitle = updates.title !== undefined ? updates.title : task.title;
+      if (isCompleted && finalAssignee.toLowerCase().trim() === "researcher" && !task.handedOff) {
+        updates.handedOff = true;
+        const originalTitle = updates.title !== undefined ? updates.title : (task.title || "");
         const originalDescription = updates.description !== undefined ? updates.description : (task.description || "");
         const originalPhase = updates.phase !== undefined ? updates.phase : (task.phase || "Research");
 
@@ -137,17 +146,19 @@ router.patch("/:id", async (req, res, next) => {
           priority: (updates.priority !== undefined ? updates.priority : task.priority) || "medium"
         });
         console.log(`[Handoff Rules Engine] Successfully handed off task ${task.id} to engineer.`);
-      } catch (err) {
-        console.error(`[Handoff Rules Engine] Failed to create handoff task: ${err.message}`);
       }
+    } catch (err) {
+      console.error(`[Handoff Rules Engine] Failed Researcher->Engineer handoff check: ${err.message}`);
     }
 
-    // Check for Engineer -> Reviewer task handoff
-    const isCompletedOrReview = updates.column === "done" || updates.column === "review";
-    if (isCompletedOrReview && finalAssignee.toLowerCase().trim() === "engineer" && !task.handedOff) {
-      updates.handedOff = true;
-      try {
-        const originalTitle = updates.title !== undefined ? updates.title : task.title;
+    // Phase 2.2 — Engineer -> Reviewer Task Handoff (Failure-isolated)
+    try {
+      const finalAssignee = (updates.assignee !== undefined ? updates.assignee : task.assignee) || "";
+      const isCompletedOrReview = updates.column === "done" || updates.column === "completed" || updates.column === "review";
+
+      if (isCompletedOrReview && finalAssignee.toLowerCase().trim() === "engineer" && !task.handedOff) {
+        updates.handedOff = true;
+        const originalTitle = updates.title !== undefined ? updates.title : (task.title || "");
         const originalDescription = updates.description !== undefined ? updates.description : (task.description || "");
         const originalPhase = updates.phase !== undefined ? updates.phase : (task.phase || "Engineering");
 
@@ -160,18 +171,25 @@ router.patch("/:id", async (req, res, next) => {
           priority: (updates.priority !== undefined ? updates.priority : task.priority) || "medium"
         });
         console.log(`[Handoff Rules Engine] Successfully handed off task ${task.id} to reviewer.`);
-      } catch (err) {
-        console.error(`[Handoff Rules Engine] Failed to create handoff task to reviewer: ${err.message}`);
       }
+    } catch (err) {
+      console.error(`[Handoff Rules Engine] Failed Engineer->Reviewer handoff check: ${err.message}`);
     }
 
-    // Check if Reviewer's handoff task is completed (Phase 2.3)
-    const isColDone = updates.column === "done" || updates.column === "completed";
-    if (isColDone && finalAssignee.toLowerCase().trim() === "reviewer" && task.title.startsWith("[HANDOFF] Review and QA:")) {
-      const originalFeatureName = task.title.replace(/^\[HANDOFF\] Review and QA:\s*/i, "").trim();
-      updates.chainComplete = true;
-      updates.chainCompleteMessage = `✅ Collaboration Complete: ${originalFeatureName} — Researched, built, and reviewed. Ready to ship.`;
-      console.log(`[Handoff Rules Engine] Handoff chain complete for: ${originalFeatureName}`);
+    // Phase 2.3 — Reviewer Task Completion / Auto-Follow-Up (Failure-isolated)
+    try {
+      const finalAssignee = (updates.assignee !== undefined ? updates.assignee : task.assignee) || "";
+      const isColDone = updates.column === "done" || updates.column === "completed";
+      const taskTitle = task.title || "";
+
+      if (isColDone && finalAssignee.toLowerCase().trim() === "reviewer" && taskTitle.startsWith("[HANDOFF] Review and QA:")) {
+        const originalFeatureName = taskTitle.replace(/^\[HANDOFF\] Review and QA:\s*/i, "").trim();
+        updates.chainComplete = true;
+        updates.chainCompleteMessage = `✅ Collaboration Complete: ${originalFeatureName} — Researched, built, and reviewed. Ready to ship.`;
+        console.log(`[Handoff Rules Engine] Handoff chain complete for: ${originalFeatureName}`);
+      }
+    } catch (err) {
+      console.error(`[Handoff Rules Engine] Failed Reviewer task completion check: ${err.message}`);
     }
 
     const updatedTask = await StorageService.update("tasks", id, updates);

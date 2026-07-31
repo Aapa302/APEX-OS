@@ -34,9 +34,10 @@ async function runTests() {
   const fs = require("fs").promises;
   const path = require("path");
 
-  // Reset dna-health-logs.json and simulations.json for deterministic testing
+  // Reset dna-health-logs.json, simulations.json, and tasks.json for deterministic testing
   try {
     await fs.writeFile(path.join(__dirname, "../dna-health-logs.json"), "[]");
+    await fs.writeFile(path.join(__dirname, "../tasks.json"), "[]");
 
     const initialSimulations = [
       {
