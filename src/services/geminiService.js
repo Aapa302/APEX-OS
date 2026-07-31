@@ -25,7 +25,7 @@ const CEO_TOOLS = [
             description: { type: "string", description: "The description or details of the task" },
             phase: { type: "string", description: "The phase/department of the task, e.g. Research, Algorithm, DNA Synthesis, Simulation, Architecture Recommendation, Product, etc. (required)" },
             column: { type: "string", enum: ["todo", "inprogress", "review", "done"], description: "The column status of the task. Defaults to 'todo'" },
-            assignee: { type: "string", description: "The ID or name of the employee assigned" },
+            assignee: { type: "string", description: "The ID or name of the employee assigned. CRITICAL: If the user does NOT explicitly specify an assignee, you MUST intelligently infer the correct assignee from the EMP_REGISTRY roles based on the nature of the request: use 'researcher' for scientific research or literature search; 'engineer' for building, coding, or implementing software; 'reviewer' for peer review, QA, or testing; 'biologist' for biological synthesis or computational biology; 'architect' for mathematical algorithms, schemas, or Big-O complexity analysis; 'cto' for tech-stack or security; 'designer' for UX/UI; 'pm' for product features; 'marketing' for campaigns; 'hr' for people ops; 'finance' for budgeting/finance; 'sales' for ICP/outreach; 'support' for help/SOPs. If the user DOES explicitly specify an assignee, respect that choice exactly." },
             priority: { type: "string", enum: ["low", "medium", "high"], description: "The priority of the task. Defaults to 'medium'" }
           },
           required: ["title", "phase"]
