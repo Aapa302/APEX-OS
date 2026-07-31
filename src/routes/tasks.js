@@ -91,53 +91,32 @@ const HANDOFF_CHAINS = [
       const title = (updates.title !== undefined ? updates.title : task.title) || "";
       const lower = title.toLowerCase();
       const isPhase5 = lower.includes("retrieve nucleotide specs") || lower.includes("gather requirements") || lower.includes("biological storage specs");
-      return !isPhase5;
+      return !isPhase5 && title.trim().toLowerCase() !== "ncbi gene research";
     }
   },
   {
     fromAssignee: "researcher",
-    toAssignee: "architect",
+    toAssignee: "pm",
     triggerColumns: ["done", "completed"],
-    titlePrefix: "[HANDOFF] Compile Reed-Solomon mapping specs based on: ",
+    titlePrefix: "[HANDOFF] DNA Storage Spec Definition based on: ",
     descriptionPrefix: "Reference to completed research task ID: ",
-    defaultPhase: "Algorithm",
+    defaultPhase: "Research",
     matches: (task, updates) => {
       const title = (updates.title !== undefined ? updates.title : task.title) || "";
-      const lower = title.toLowerCase();
-      const isPhase5 = lower.includes("retrieve nucleotide specs") || lower.includes("gather requirements") || lower.includes("biological storage specs");
-      return isPhase5;
+      return title.trim().toLowerCase() === "ncbi gene research";
     }
   },
   {
-    fromAssignee: "architect",
-    toAssignee: "biologist",
+    fromAssignee: "pm",
+    toAssignee: "engineer",
     triggerColumns: ["done", "completed"],
-    titlePrefix: "[HANDOFF] Synthesize payload into DNA for: ",
-    descriptionPrefix: "Reference to completed algorithm task ID: ",
-    defaultPhase: "DNA Synthesis"
-  },
-  {
-    fromAssignee: "biologist",
-    toAssignee: "data_sci",
-    triggerColumns: ["done", "completed"],
-    titlePrefix: "[HANDOFF] Simulate thermal PCR cycles for: ",
-    descriptionPrefix: "Reference to completed DNA synthesis task ID: ",
-    defaultPhase: "Simulation"
-  },
-  {
-    fromAssignee: "data_sci",
-    toAssignee: "storage_arch",
-    triggerColumns: ["done", "completed"],
-    titlePrefix: "[HANDOFF] Assess pipeline parameters & log production-lock decision for: ",
-    descriptionPrefix: "Reference to completed simulation task ID: ",
-    defaultPhase: "Architecture Recommendation"
-  },
-  {
-    fromAssignee: "storage_arch",
-    toAssignee: null,
-    chainComplete: true,
-    triggerColumns: ["done", "completed"],
-    titleMatchPrefix: "[HANDOFF] Assess pipeline parameters & log production-lock decision for:"
+    titlePrefix: "[HANDOFF] Vite Frontend Integration based on: ",
+    descriptionPrefix: "Reference to completed PM task ID: ",
+    defaultPhase: "Engineering",
+    matches: (task, updates) => {
+      const title = (updates.title !== undefined ? updates.title : task.title) || "";
+      return title.toLowerCase().includes("dna storage spec definition");
+    }
   },
   {
     fromAssignee: "engineer",
