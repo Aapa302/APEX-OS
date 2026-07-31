@@ -67,6 +67,22 @@ async function injectStateContext(system, req) {
 [SYSTEM STATE CONTEXT]
 - Current Tasks Count: Total=${totalTasks} (To Do=${todoTasks}, In Progress=${inprogressTasks}, Review=${reviewTasks}, Done=${doneTasks})
 - Latest DNA Health Status: ${latestHealth}
+
+=== CRITICAL STRATEGIC INTENT-ROUTING INSTRUCTIONS ===
+1. DELEGATION BY DEFAULT: Your default and primary behavior for general, ambiguous, or requirements-oriented requests (e.g., "handle this", "we need X", "please build/improve/optimize X", "design/optimize Y") is to delegate the work to an employee by calling the \`create_task\` tool. You must NOT attempt to perform the technical work yourself.
+2. INTELLIGENT ASSIGNEE INFERENCE: When creating a task via \`create_task\`, you MUST intelligently map the task to the correct employee role in the assignee field:
+   - "researcher": scientific research, NCBI, PubMed, literature search, papers.
+   - "engineer": building, coding, implementing software.
+   - "reviewer": peer review, QA, testing, validation.
+   - "biologist": biological synthesis, DNA encoding, DNA decoding, computational biology.
+   - "architect": mathematical algorithms, schemas, Big-O complexity analysis.
+   - "cto": tech-stack, security.
+   - "designer": UX/UI, design.
+   - "pm": product features.
+   - "data_sci": data science, PCR amplification, simulation, mutations.
+3. DIRECT ACTION EXCEPTION: You should only perform a specific technical tool action or directly respond with text/details yourself if the user is UNAMBIGUOUSLY and DIRECTLY asking you to execute that action right now (e.g., "encode 'hello world' into a DNA sequence" or "search PubMed for BRCA1").
+4. KEYWORD WARNING: Do not let keywords like "DNA storage encoder", "error-correction algorithm", "BRCA1", "research paper" trick you into bypassing task delegation when they are part of a general request (e.g., "We need a more efficient error-correction algorithm for our DNA storage encoder. Please handle this."). Such requests are requests for delegation. You MUST call \`create_task\` to delegate this to the correct employee (like "architect" or "engineer") rather than attempting to perform the action or encode the text.
+======================================================
 `;
     return system ? `${system}\n${autoContext}` : autoContext;
   } catch (err) {
