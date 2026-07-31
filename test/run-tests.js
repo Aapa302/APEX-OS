@@ -705,6 +705,44 @@ async function runTests() {
     await fetch(`${BASE_TASKS_URL}/${engineerTask.id}`, { method: "DELETE" });
     await fetch(`${BASE_TASKS_URL}/${engHandoffTask.id}`, { method: "DELETE" });
 
+    // Ia. Test Reviewer Task Completion (Phase 2.3 chain complete)
+    console.log("  - PATCH /tasks/:id (Reviewer task completion triggers chainComplete)");
+
+    // 1. Create a reviewer handoff task
+    const reviewerTaskRes = await fetch(BASE_TASKS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "[HANDOFF] Review and QA: BRCA1 Encoder Optimization",
+        description: "Verify optimal density and correctness.",
+        phase: "Engineering",
+        column: "inprogress",
+        assignee: "reviewer",
+        priority: "high"
+      })
+    });
+    assert.strictEqual(reviewerTaskRes.status, 201);
+    const reviewerTask = await reviewerTaskRes.json();
+
+    // 2. Complete the reviewer task via PATCH
+    const completeReviewerTaskRes = await fetch(`${BASE_TASKS_URL}/${reviewerTask.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        column: "completed"
+      })
+    });
+    assert.strictEqual(completeReviewerTaskRes.status, 200);
+    const completedReviewerTask = await completeReviewerTaskRes.json();
+
+    // 3. Verify chainComplete and chainCompleteMessage are present
+    assert.ok(completedReviewerTask.column === "done" || completedReviewerTask.column === "completed");
+    assert.strictEqual(completedReviewerTask.chainComplete, true);
+    assert.strictEqual(completedReviewerTask.chainCompleteMessage, "✅ Collaboration Complete: BRCA1 Encoder Optimization — Researched, built, and reviewed. Ready to ship.");
+
+    // 4. Clean up reviewer task
+    await fetch(`${BASE_TASKS_URL}/${reviewerTask.id}`, { method: "DELETE" });
+
     console.log("✅ Passed: Tasks Express Routes integration\n");
 
     // ── 13. Test DNA Health Check Express Routes ───────────────
