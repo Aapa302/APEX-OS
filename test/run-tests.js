@@ -1164,6 +1164,171 @@ async function runTests() {
 
     console.log("✅ Passed: Debug List Simulations Express Route\n");
 
+    // ── 19. Test Deployment Express Route ──────────────────────────
+    console.log("Testing: Deployment Express Route...");
+    const BASE_DEPLOY_URL = `http://localhost:${PORT}/api/builds/test_build_123/deploy`;
+
+    // Ensure we backup existing env vars first
+    const backupGithubToken = process.env.GITHUB_TOKEN;
+    const backupRenderApiKey = process.env.RENDER_API_KEY;
+
+    try {
+      // Case A: Missing credentials
+      delete process.env.GITHUB_TOKEN;
+      delete process.env.RENDER_API_KEY;
+
+      const missingCredsRes = await fetch(BASE_DEPLOY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectName: "Test Project",
+          files: [{ path: "index.html", content: "<h1>Hello</h1>" }]
+        })
+      });
+
+      assert.strictEqual(missingCredsRes.status, 400, "Should return 400 when credentials are empty");
+      const missingCredsData = await missingCredsRes.json();
+      assert.strictEqual(missingCredsData.error.type, "missing_credentials");
+      assert.ok(missingCredsData.error.missingVariables.includes("GITHUB_TOKEN"));
+      assert.ok(missingCredsData.error.missingVariables.includes("RENDER_API_KEY"));
+      console.log("    ✓ Handled missing credentials successfully (returned 400 Bad Request)");
+
+      // Case B: Credentials provided but invalid input (missing projectName)
+      process.env.GITHUB_TOKEN = "dummy_github_token";
+      process.env.RENDER_API_KEY = "dummy_render_key";
+
+      const missingProjectRes = await fetch(BASE_DEPLOY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: [{ path: "index.html", content: "<h1>Hello</h1>" }]
+        })
+      });
+
+      assert.strictEqual(missingProjectRes.status, 400, "Should return 400 when projectName is missing");
+      const missingProjectData = await missingProjectRes.json();
+      assert.strictEqual(missingProjectData.error.type, "invalid_request");
+      assert.ok(missingProjectData.error.message.includes("projectName"));
+      console.log("    ✓ Handled missing projectName successfully (returned 400 Bad Request)");
+
+      // Case C: Credentials provided but invalid input (missing files)
+      const missingFilesRes = await fetch(BASE_DEPLOY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectName: "Test Project"
+        })
+      });
+
+      assert.strictEqual(missingFilesRes.status, 400, "Should return 400 when files are missing");
+      const missingFilesData = await missingFilesRes.json();
+      assert.strictEqual(missingFilesData.error.type, "invalid_request");
+      assert.ok(missingFilesData.error.message.includes("files"));
+      console.log("    ✓ Handled missing files successfully (returned 400 Bad Request)");
+
+      // Case D: Successful simulation of GitHub + Render deployment via mocked fetch
+      const originalFetch = global.fetch;
+      try {
+        global.fetch = async (url, options = {}) => {
+          // If we are calling the local deploy route, forward to original fetch
+          if (typeof url === "string" && url.startsWith(`http://localhost:${PORT}`)) {
+            return originalFetch(url, options);
+          }
+
+          // Otherwise mock the external GitHub and Render calls
+          const urlStr = typeof url === "string" ? url : "";
+
+          if (urlStr.startsWith("https://api.github.com/user/repos")) {
+            return {
+              ok: true,
+              status: 201,
+              json: async () => ({ name: "test-project" })
+            };
+          }
+          if (urlStr.startsWith("https://api.github.com/user")) {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({ login: "apex-test-user" })
+            };
+          }
+          if (urlStr.startsWith("https://api.github.com/repos/")) {
+            // Mock file existence check (return 404 so it updates or creates) or PUT contents
+            if (options.method === "PUT") {
+              return {
+                ok: true,
+                status: 200,
+                json: async () => ({ content: { name: "index.html" } })
+              };
+            }
+            // File existence check
+            return {
+              ok: false,
+              status: 404,
+              text: async () => "Not Found"
+            };
+          }
+          if (urlStr.startsWith("https://api.render.com/v1/owners")) {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => [{ owner: { id: "owner_123" } }]
+            };
+          }
+          if (urlStr.startsWith("https://api.render.com/v1/services")) {
+            if (options.method === "POST") {
+              return {
+                ok: true,
+                status: 201,
+                json: async () => ({ service: { url: "https://test-project.onrender.com" } })
+              };
+            }
+            // Listing services
+            return {
+              ok: true,
+              status: 200,
+              json: async () => []
+            };
+          }
+
+          return {
+            ok: false,
+            status: 400,
+            text: async () => `Mock unhandled request to ${urlStr}`
+          };
+        };
+
+        const successRes = await fetch(BASE_DEPLOY_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectName: "Test Project",
+            files: [{ path: "index.html", content: "<h1>Hello World</h1>" }]
+          })
+        });
+
+        assert.strictEqual(successRes.status, 200, "Should return 200 on successful mocked deploy");
+        const successData = await successRes.json();
+        assert.strictEqual(successData.success, true);
+        assert.strictEqual(successData.githubUrl, "https://github.com/apex-test-user/test-project");
+        assert.strictEqual(successData.renderUrl, "https://test-project.onrender.com");
+        console.log("    ✓ Successfully mocked full deployment flow to GitHub & Render!");
+
+      } finally {
+        global.fetch = originalFetch;
+      }
+
+    } finally {
+      // Restore original env state
+      if (backupGithubToken !== undefined) process.env.GITHUB_TOKEN = backupGithubToken;
+      else delete process.env.GITHUB_TOKEN;
+
+      if (backupRenderApiKey !== undefined) process.env.RENDER_API_KEY = backupRenderApiKey;
+      else delete process.env.RENDER_API_KEY;
+    }
+
+    console.log("✅ Passed: Deployment Express Route\n");
+
     console.log("🎉 All tests passed!");
     process.exit(0);
   } catch (err) {
